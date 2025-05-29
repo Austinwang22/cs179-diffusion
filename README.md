@@ -12,7 +12,7 @@ To train a diffusion model on MNIST, run the following:
 python3 pyref/train.py
 ```
 
-To generate samples, run:
+To generate new samples, run:
 
 ```bash
 python3 pyref/sample.py

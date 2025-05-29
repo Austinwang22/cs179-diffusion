@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--Pstd', type=float, default=1.2)
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--num_steps', type=int, default=80)
+    parser.add_argument('--num_steps', type=int, default=1000)
     parser.add_argument('--sigma_min', type=float, default=0.002)
     parser.add_argument('--sigma_max', type=int, default=80.)
     parser.add_argument('--rho', type=int, default=7)
