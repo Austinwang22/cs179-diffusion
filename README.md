@@ -17,3 +17,9 @@ To generate new samples, run:
 ```bash
 python3 pyref/sample.py
 ```
+
+Here are some generated samples:
+
+![Alt text](figs/sample2.png)
+![Alt text](figs/sample3.png)
+![Alt text](figs/sample4.png)
