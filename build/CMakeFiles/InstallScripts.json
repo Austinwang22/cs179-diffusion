@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/bkwang/cs179-diffusion/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

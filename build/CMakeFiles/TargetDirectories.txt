@@ -1,0 +1,5 @@
+/home/bkwang/cs179-diffusion/build/CMakeFiles/diffusion_lib.dir
+/home/bkwang/cs179-diffusion/build/CMakeFiles/diffusion.dir
+/home/bkwang/cs179-diffusion/build/CMakeFiles/tests.dir
+/home/bkwang/cs179-diffusion/build/CMakeFiles/edit_cache.dir
+/home/bkwang/cs179-diffusion/build/CMakeFiles/rebuild_cache.dir
