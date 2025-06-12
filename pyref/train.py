@@ -6,6 +6,35 @@ from unet import EDMPrecond, UNet
 from torch.optim import Adam
 from argparse import ArgumentParser
 
+
+#   To move the Python training loop, including data loading and optimizer steps, into a fully C++/CUDA implementation,
+#   parallelize both the DataLoader and the optimizer.
+
+#   1) DATA LOADER PARALLELISM (HOST SIDE):
+#      - Use a thread pool to spin up multiple worker threads (num_workers) that each:
+#          – Read image batches from disk into host memory.
+#          – Enqueue completed batches into a lock‐free circular buffer (producer/consumer queue).
+#      - The main training thread (consumer) dequeues ready batches and immediately issues
+#        asynchronous cudaMemcpyAsync() calls to transfer data to device memory on dedicated CUDA streams,
+#        overlapping data transfers with GPU computation.
+#      - This pipelining ensures that I/O, CPU transforms, host→device copies, and GPU compute all run concurrently.
+
+#   2) OPTIMIZER PARALLELISM (DEVICE SIDE):
+#      • Represent each learnable parameter tensor as a contiguous region in GPU global memory.
+#      • After the backward pass, gradients for every parameter are resident on the device.
+#      • Launch a single fused CUDA kernel (or one per parameter group) that:
+#          – Reads gradient and current weight for each element.
+#          – Applies the optimizer update rule.
+#          – Writes updated weight (and velocity buffer if used) back to global memory.
+#        • Use one CUDA thread per tensor element (or block‐wide tiling) to maximize throughput.
+
+#   Once we have the CUDA code for the DataLoader and the optimizer, we can parallelize the training of our model.
+
+#   TESTING: to verify the correctness of our GPU implementation we can initialize both the PyTorch and CUDA models
+#   with the same weights and the same optimizer hyperparameters, then train for one iteration. We can then verify
+#   that the model weights should still be the same (within some small threshold). 
+
+
 def edm_loss(batch, net:EDMPrecond, Pmean=-1.2, Pstd=1.2):
     x0 = batch
     B = x0.shape[0]

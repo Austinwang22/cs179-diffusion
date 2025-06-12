@@ -2,6 +2,59 @@ import torch
 import torch.nn.functional as F
 import math
 
+#   To re-implement this PyTorch UNet + EDM pipeline in C++/CUDA from scratch, parallelize every tensor operation
+#   by launching CUDA kernels or using highly-optimized cuBLAS/cuDNN routines.
+
+#   1) HOST SETUP
+#      - Allocate device buffers for inputs, weights, biases, and intermediate activations.
+#      - Transfer model parameters (conv kernels, linear weights, etc.) to GPU global memory.
+#      - For each forward pass, copy input batch to device (or use persistent GPU memory).
+
+#   2) LINEAR LAYERS (e.g. time_proj, MLP)
+#      - Represent as matrix–vector or matrix–matrix multiplies.
+#      - Launch a GEMM kernel (cuBLAS sgemm) or a custom tiled kernel:
+#          – GridDim = ceil(M/TILE_M) × ceil(N/TILE_N), BlockDim = TILE_M × TILE_N threads.
+#          – Each thread-block loads a TILE_M×K submatrix of A (input) and a K×TILE_N submatrix of B (weights)
+#            into shared memory, performs partial dot products, then writes TILE_M×TILE_N results to global memory.
+#      - Follow with elementwise bias add and activation (SiLU): one thread per output element; uses fast CUDA math.
+
+#   3) 2D CONVOLUTION (Conv2D and ConvTranspose2d)
+#      - Convolution kernel
+#          – Kernel launch: GridDim = (N, out_channels, H_out, W_out), BlockDim = (tile_W, tile_H) threads.
+#          – Each thread-block:
+#              - Loads a tile of the input feature map into shared memory (including halo for kernel radius).
+#              - Loads corresponding filter weights into registers or shared memory.
+#              - Each thread computes one (or a small tile of) output pixel by sliding the kernel window.
+#              - Accumulates over input channels.
+#          – Use loop unrolling and warp-level reductions to speed up the inner product.
+#      - For ConvTranspose2d (upsampling):
+#          – Similar to convolution but reversed indexing: each thread scatters its input into the appropriate output locations,
+#            or implement deconvolution by swapping roles of input/output in a direct conv kernel.
+
+#   4) ACTIVATIONS (ReLU, SiLU)
+#      - Elementwise operations: launch one CUDA thread per element.
+#      - Each thread loads one or more values from global memory, applies the activation, writes back.
+#      - Perfectly parallel with no inter-thread communication.
+
+#   5) POOLING (MaxPool2d)
+#      - For 2×2 max-pool:
+#          – GridDim = (N, C, H_out, W_out), BlockDim = (pool_H, pool_W) threads.
+#          – Each thread reads its 2×2 patch from input and computes max.
+#          – Write one scalar to output per thread.
+
+#   6) CONCATENATION (skip connections)
+#      - Treated as a memory copy kernel:
+#          – GridDim = (batch, channels, H, W) split across two sources.
+#          – Each thread writes from either input A or input B into the correct region of the output tensor.
+
+#   7) ELEMENTWISE OPERATIONS (adding time embeddings, c_skip*x, c_out*raw)
+#      - Use a broadcast-aware kernel: each thread multiplies or adds a scalar or vector across a tile of the tensor.
+
+#   TESTS: we will verify that the UNet with CUDA has the same output as the UNet in PyTorch when running a forward pass
+#   from the same input tensors. We will verify that the specific encoder and decoder blocks as well have the same outputs
+#   from given input tensors. 
+
+
 class TimeEmbedding(torch.nn.Module):
     
     def __init__(self, emb_dim, mlp_dim=None):

@@ -5,6 +5,9 @@ from argparse import ArgumentParser
 from unet import EDMPrecond, UNet
 from utils import save_image_batch
 
+# Parallelizing this with CUDA just requires the neural network forward pass and the tensor operations to be parallelized.
+# We detailed how to do this in the unet.py file. 
+
 def euler_sampler(net, num_samples, num_steps=18, sigma_min=0.002, 
                 sigma_max=80, rho=7, device='cuda'):
     model.eval()
