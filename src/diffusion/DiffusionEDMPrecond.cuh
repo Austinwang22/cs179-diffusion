@@ -1,4 +1,5 @@
 #pragma once
+
 // DiffusionEDM.cuh – EDMPrecondBF16 wrapper
 #include "DiffusionHelper.cuh"
 #include "DiffusionUNet.cuh"
