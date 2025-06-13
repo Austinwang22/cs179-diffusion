@@ -1,7 +1,6 @@
 #pragma once
 // DiffusionLayers.cuh – Linear, Conv2d, MaxPool, LayerNorm (bf16), TimeEmbedding
 #include "DiffusionHelper.cuh"
-#include "DiffusionKernels.cuh"
 
 #include "../CudaBuffer.cuh"
 #include "../ErrorCheck.h"
@@ -13,13 +12,13 @@ using namespace kernels;
 class LinearBF16 {
 public:
     int in_f, out_f;
-    std::shared_ptr<CudaBuffer> W;  // column‑major [out_f, in_f]
-    std::shared_ptr<CudaBuffer> b;  // [out_f]
+    std::shared_ptr<const CudaBuffer> W_;  // column‑major [out_f, in_f]
+    std::shared_ptr<const CudaBuffer> b_;  // [out_f]
 
     LinearBF16(int inFeat, int outFeat): in_f(inFeat), out_f(outFeat)
     {
-        W = std::make_shared<CudaBuffer>(size_t(out_f) * in_f * sizeof(__nv_bfloat16));
-        b = std::make_shared<CudaBuffer>(out_f * sizeof(__nv_bfloat16));
+        W_ = std::make_shared<const CudaBuffer>(size_t(out_f) * in_f * sizeof(__nv_bfloat16));
+        b_ = std::make_shared<const CudaBuffer>(size_t(out_f) * sizeof(__nv_bfloat16));
     }
 
     void forward(const __nv_bfloat16 *x,       // [in_f]
@@ -30,151 +29,139 @@ public:
         const float alpha = 1.f, beta = 0.f;
         // y = W * x  ;  W column‑major (out_f×in_f)
         // GEMM: (out_f×1) = (out_f×in_f) * (in_f×1)
-        // cublasGemmEx(blas,
-        //              CUBLAS_OP_N, CUBLAS_OP_N,
-        //              out_f, 1, in_f,
-        //              &alpha,
-        //              W->data, CUDA_R_16BF, out_f,
-        //              x,        CUDA_R_16BF, in_f,
-        //              &beta,
-        //              y,        CUDA_R_16BF, out_f,
-        //              CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        
-        // // ==== row major ====
         cublasGemmEx(blas, 
                     CUBLAS_OP_T,  // <-- transpose W on-the-fly
                     CUBLAS_OP_N,
                     out_f, 1, in_f,
                     &alpha,
-                    W->data, CUDA_R_16BF, in_f,   // lda = in_f
+                    W_->data,  CUDA_R_16BF, in_f,   // lda = in_f
                     x,        CUDA_R_16BF, in_f,
                     &beta,
                     y,        CUDA_R_16BF, out_f,
                     CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
 
-        lin_add_bias<<<(out_f + 255) / 256, 256, 0, s>>>(y,
-            static_cast<const __nv_bfloat16*>(b->data), out_f);
+        lin_add_bias<<<(out_f + 255) / 256, 256, 0, s>>>(y, static_cast<const __nv_bfloat16*>(b_->data), out_f);
     }
 
-    void forward32(const __nv_bfloat16 *x_bf16,   // [in_f]  (BF16)
-                   float                *y_fp32,  // [out_f] (FP32)
-                   cudaStream_t s) const {
+    void forward32(const __nv_bfloat16 *x_bf16,   // [in_f] (BF16)
+                float               *y_fp32,      // [out_f] (FP32)
+                cudaStream_t         s) const
+    {
         auto &blas = Handles::get().blas;  cublasSetStream(blas, s);
-
         const float alpha = 1.f, beta = 0.f;
 
-        /*  GEMM:  y_fp32 = W_bf16^T  *  x_bf16   (accumulate in FP32) */
+        /* GEMM:   y_fp32 = W_bf16ᵀ · x_bf16   (accumulate in FP32) */
         cublasGemmEx(blas,
-                    CUBLAS_OP_T,  CUBLAS_OP_N,
+                    CUBLAS_OP_T, CUBLAS_OP_N,
                     out_f, 1, in_f,
                     &alpha,
-                    W->data,                CUDA_R_16BF,  in_f,   // **BF16 weights**
-                    x_bf16,                 CUDA_R_16BF,  in_f,   // BF16 input
+                    W_->data, CUDA_R_16BF, in_f,   // BF16 weights
+                    x_bf16,  CUDA_R_16BF, in_f,   // BF16 input
                     &beta,
-                    y_fp32,                 CUDA_R_32F,   out_f,  // FP32 output
-                    CUDA_R_32F,  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+                    y_fp32,  CUDA_R_32F,  out_f,  // FP32 output
+                    CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
 
-        /* add BF16 bias in FP32 */
+        /* add BF16 bias **in FP32** */
         int tpb = 256, blk = (out_f + tpb - 1) / tpb;
-        kernels::add_bias_fp32_kernel<<<blk, tpb, 0, s>>>(y_fp32,
-                                                static_cast<const __nv_bfloat16*>(b->data),
-                                                out_f);
+        kernels::add_bias_fp32_kernel<<<blk, tpb, 0, s>>>(
+            y_fp32,
+            static_cast<const __nv_bfloat16*>(b_->data),
+            out_f);
     }
-
-    void set_weights(std::shared_ptr<CudaBuffer> w, std::shared_ptr<CudaBuffer> b_) {
-        W = std::move(w);
-        b = std::move(b_);
-    }
-
-    __nv_bfloat16*       weights()       { return static_cast<__nv_bfloat16*>(W->data); }
-    const __nv_bfloat16* weights() const { return static_cast<const __nv_bfloat16*>(W->data); }
-
-    __nv_bfloat16*       bias()       { return static_cast<__nv_bfloat16*>(b->data); }
-    const __nv_bfloat16* bias() const { return static_cast<const __nv_bfloat16*>(b->data); }
 };
 
 // -----------------------------------------------------------------------------
 // 2.  Conv2dBF16  (same as before, but bias pointer cached)
 // -----------------------------------------------------------------------------
+
 class Conv2dBF16 {
 public:
-    int in, out;
-    std::shared_ptr<CudaBuffer> W;
-    std::shared_ptr<CudaBuffer> b;
-
-    Conv2dBF16(int inC, int outC): in(inC), out(outC)
+    int inC_, outC_;
+    std::shared_ptr<const CudaBuffer> W_, b_;
+    
+    /* parameters are allocated & owned by the layer */
+    Conv2dBF16(int inC, int outC): inC_(inC), outC_(outC)
     {
-        // allocate weight buffer
-        W = std::make_shared<CudaBuffer>(size_t(out) * in * 3 * 3 * sizeof(__nv_bfloat16));
-        b = std::make_shared<CudaBuffer>(size_t(out) * sizeof(__nv_bfloat16));
+        W_ = std::make_shared<const CudaBuffer>(size_t(outC) * inC * 3 * 3 * sizeof(__nv_bfloat16));
+        b_ = std::make_shared<const CudaBuffer>(size_t(outC) * sizeof(__nv_bfloat16));
 
-        auto &dnn = Handles::get().dnn;
+        cudnnCreateFilterDescriptor(&wDesc_);
+        cudnnSetFilter4dDescriptor(wDesc_, CUDNN_DATA_BFLOAT16,
+                                   CUDNN_TENSOR_NCHW, outC_, inC_, 3, 3);
 
-        /* 1. filter desc */
-        cudnnCreateFilterDescriptor(&w_desc);
-        cudnnSetFilter4dDescriptor(w_desc,
-            CUDNN_DATA_BFLOAT16, CUDNN_TENSOR_NCHW,
-            out, in, 3, 3);
+        cudnnCreateConvolutionDescriptor(&convDesc_);
+        cudnnSetConvolution2dDescriptor(convDesc_,
+                                        1,1,   // pad
+                                        1,1,   // stride
+                                        1,1,   // dilation
+                                        CUDNN_CROSS_CORRELATION,
+                                        CUDNN_DATA_FLOAT);
+        cudnnSetConvolutionMathType(convDesc_, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
 
-        /* 2. convolution desc */
-        cudnnCreateConvolutionDescriptor(&conv_desc);
-        cudnnSetConvolution2dDescriptor(conv_desc,
-            /*padH,W=*/1, 1,
-            /*strideH,W=*/1, 1,
-            /*dilationH,W=*/1, 1,
-            CUDNN_CROSS_CORRELATION,
-            CUDNN_DATA_FLOAT); // BFLOAT16
-        cudnnSetConvolutionMathType(conv_desc, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
-
-        /* 3. tensor descs (created here, sizes filled in forward()) */
-        cudnnCreateTensorDescriptor(&x_desc);
-        cudnnCreateTensorDescriptor(&y_desc);
-
-        /* pick default forward algo */
-        algo = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
+        cudnnCreateTensorDescriptor(&xDesc_); 
+        cudnnCreateTensorDescriptor(&yDesc_);
+        algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
     }
 
-    void forward(const __nv_bfloat16 *x, 
-                 int B, int H, int W_,
-                 __nv_bfloat16 *y, cudaStream_t s)
+    ~Conv2dBF16() noexcept {
+        cudnnDestroyTensorDescriptor(xDesc_);
+        cudnnDestroyTensorDescriptor(yDesc_);
+        cudnnDestroyFilterDescriptor(wDesc_);
+        cudnnDestroyConvolutionDescriptor(convDesc_);
+    }
+
+    //------------------------------------------------ forward
+    void forward(const __nv_bfloat16 *x,
+                 int N, int H, int W,
+                 __nv_bfloat16 *y,
+                 cudaStream_t stream)
     {
-        auto &dnn = Handles::get().dnn; cudnnSetStream(dnn,s);
-        cudnnSetTensor4dDescriptor(x_desc,CUDNN_TENSOR_NCHW,CUDNN_DATA_BFLOAT16,
-                                   B,in,H,W_);
-        cudnnSetTensor4dDescriptor(y_desc,CUDNN_TENSOR_NCHW,CUDNN_DATA_BFLOAT16,
-                                   B,out,H,W_);
-        size_t wsB=0;
-        cudnnGetConvolutionForwardWorkspaceSize(dnn,x_desc,w_desc,
-                                                conv_desc,y_desc,algo,&wsB);
-        CudaBuffer ws(wsB);
+        auto &dnn = Handles::get().dnn;
+        cudnnSetStream(dnn, stream);
+
+        cudnnSetTensor4dDescriptor(xDesc_, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+                                   N, inC_, H, W);
+
+        int nOut,cOut,hOut,wOut;
+        cudnnGetConvolution2dForwardOutputDim(convDesc_, xDesc_, wDesc_,
+                                              &nOut,&cOut,&hOut,&wOut);
+        if (nOut!=N || cOut!=outC_)
+            throw std::runtime_error("Conv2dBF16: channel mismatch");
+
+        cudnnSetTensor4dDescriptor(yDesc_, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+                                   nOut,cOut,hOut,wOut);
+
+        // persistent workspace (grown once, never freed)
+        size_t need=0;
+        cudnnGetConvolutionForwardWorkspaceSize(dnn, xDesc_, wDesc_, convDesc_,
+                                                yDesc_, algo_, &need);
+        // ensure_size(ws_, need);
+        ws_ = std::make_shared<CudaBuffer>(need);
+
         const float alpha=1.f, beta=0.f;
         cudnnConvolutionForward(dnn,&alpha,
-                                x_desc,x,
-                                w_desc,W->data,
-                                conv_desc,algo,
-                                ws.data,wsB,
+                                xDesc_, x,
+                                wDesc_, W_->data,
+                                convDesc_, algo_,
+                                ws_->data, ws_->size,
                                 &beta,
-                                y_desc,y);
+                                yDesc_, y);
 
-        conv_add_bias<<<(size_t(B)*out*H*W_+255)/256,256,0,s>>>(y,static_cast<const __nv_bfloat16*>(b->data),B,out,H*W_);
+        // std::size_t HW = static_cast<std::size_t>(hOut)*wOut;
+        // std::size_t tot = static_cast<std::size_t>(N)*outC_*HW;
+        // dim3 grid((tot+255)/256);
+        // conv_add_bias<<<256,64,0,stream>>>(y,
+        //                                  static_cast<const __nv_bfloat16*>(b_->data),
+        //                                  N, outC_, static_cast<int>(HW));
+        cudaGetLastError();
     }
-
-    void set_weights(std::shared_ptr<CudaBuffer> w_){ W=std::move(w_); }
-    void set_bias   (std::shared_ptr<CudaBuffer> b_){ b=std::move(b_); }
-
-    __nv_bfloat16* weights() { return static_cast<__nv_bfloat16*>(W->data); }
-    const __nv_bfloat16* weights() const { return static_cast<const __nv_bfloat16*>(W->data); }
-
-    __nv_bfloat16* bias() { return static_cast<__nv_bfloat16*>(b->data); }
-    const __nv_bfloat16* bias() const { return static_cast<const __nv_bfloat16*>(b->data); }
-
-    int out_channels() const { return out; }
-
 private:
-    cudnnTensorDescriptor_t x_desc{},y_desc{};
-    cudnnFilterDescriptor_t w_desc{};
-    cudnnConvolutionDescriptor_t conv_desc{};
-    cudnnConvolutionFwdAlgo_t algo{};
+    std::shared_ptr<CudaBuffer> ws_;               // <- ***persistent scratch***
+
+    cudnnFilterDescriptor_t      wDesc_{};  
+    cudnnConvolutionDescriptor_t convDesc_{};
+    cudnnTensorDescriptor_t      xDesc_{}, yDesc_{};
+    cudnnConvolutionFwdAlgo_t    algo_{};
 };
 
 // -----------------------------------------------------------------------------
@@ -182,14 +169,14 @@ private:
 // -----------------------------------------------------------------------------
 class ConvTrans2dBF16 {
 public:
-    int in{1},out{1};
-    std::shared_ptr<CudaBuffer> W,b;
+    int in{0},out{0};
+    std::shared_ptr<const CudaBuffer> W_, b_;
 
     ConvTrans2dBF16(int inC, int outC): in(inC), out(outC)
     {
         // 1. allocate  (Cout, Cin, 2, 2)
-        W = std::make_shared<CudaBuffer>(size_t(out) * in * 4 * sizeof(__nv_bfloat16));
-        b = std::make_shared<CudaBuffer>(size_t(out) * sizeof(__nv_bfloat16));
+        W_ = std::make_shared<const CudaBuffer>(size_t(out) * in * 4 * sizeof(__nv_bfloat16));
+        b_ = std::make_shared<const CudaBuffer>(size_t(out) * sizeof(__nv_bfloat16));
 
         auto &dnn = Handles::get().dnn;
 
@@ -205,7 +192,8 @@ public:
             /*padH,W=*/0, 0,
             /*strH,W=*/2, 2,
             /*dilH,W=*/1, 1,
-            CUDNN_CROSS_CORRELATION, CUDNN_DATA_BFLOAT16); // BFLOAT16
+            CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT); // BFLOAT16
+        cudnnSetConvolutionMathType(deconv_desc, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
 
         cudnnCreateTensorDescriptor(&x_desc);
         cudnnCreateTensorDescriptor(&y_desc);
@@ -218,46 +206,38 @@ public:
         cudnnDestroyFilterDescriptor(w_desc);  cudnnDestroyConvolutionDescriptor(deconv_desc);
     }
 
-    void forward(const __nv_bfloat16 *x, int B, int H, int W_,
+    void forward(const __nv_bfloat16 *x, int B, int H, int W,
                  __nv_bfloat16 *y, cudaStream_t s)
     {
         auto &dnn = Handles::get().dnn;  cudnnSetStream(dnn, s);
 
         cudnnSetTensor4dDescriptor(x_desc, CUDNN_TENSOR_NCHW,
-                                CUDNN_DATA_BFLOAT16, B, in,  H,  W_);
+                                CUDNN_DATA_BFLOAT16, B, in,  H,  W);
         cudnnSetTensor4dDescriptor(y_desc, CUDNN_TENSOR_NCHW,
-                                CUDNN_DATA_BFLOAT16, B, out, H*2, W_*2);
+                                CUDNN_DATA_BFLOAT16, B, out, H*2, W*2);
 
         size_t wsB = 0;
         cudnnGetConvolutionBackwardDataWorkspaceSize(
             dnn, w_desc, x_desc, deconv_desc, y_desc, algo, &wsB);
-
-        CudaBuffer ws(wsB);
+        ws_ = std::make_shared<CudaBuffer>(wsB);
 
         const float alpha = 1.f, beta = 0.f;
         cudnnConvolutionBackwardData(
             dnn, &alpha,
-            w_desc, W->data,          // filter
+            w_desc, W_->data,          // filter
             x_desc, x,                // dy
             deconv_desc, algo,
-            ws.data, wsB,
+            ws_->data, ws_->size,
             &beta,
             y_desc, y);               // dx  (our upsampled output)
 
-        conv_add_bias<<<(size_t(B) * out * H * 2 * W_ * 2 + 255) / 256, 256, 0, s>>>(
-                y, static_cast<const __nv_bfloat16*>(b->data), B, out, (H * 2) * (W_ * 2));
+        conv_add_bias<<<(size_t(B) * out * H * 2 * W * 2 + 255) / 256, 256, 0, s>>>(
+            y, static_cast<const __nv_bfloat16*>(b_->data), B, out, (H * 2) * (W * 2));
     }
 
-    void set_weights(std::shared_ptr<CudaBuffer> w_){ W=std::move(w_); }
-    void set_bias   (std::shared_ptr<CudaBuffer> b_){ b=std::move(b_); }
-
-    __nv_bfloat16* weights() { return static_cast<__nv_bfloat16*>(W->data); }
-    const __nv_bfloat16* weights() const { return static_cast<const __nv_bfloat16*>(W->data); }
-    __nv_bfloat16* bias() { return static_cast<__nv_bfloat16*>(b->data); }
-    const __nv_bfloat16* bias() const { return static_cast<const __nv_bfloat16*>(b->data); }
-
-
 private:
+    std::shared_ptr<CudaBuffer> ws_;
+
     cudnnTensorDescriptor_t x_desc{},y_desc{};
     cudnnFilterDescriptor_t w_desc{};
     cudnnConvolutionDescriptor_t deconv_desc{};
@@ -290,70 +270,54 @@ private:
 class TimeEmbeddingBF16 {
 public:
     const int dim;
-    LinearBF16 proj1, proj2;
+    std::shared_ptr<LinearBF16> proj1, proj2;
 
-    CudaBuffer tmp_bf16{0};
-    CudaBuffer out_fp32{0};                 //  <-- new (stores bias in FP32)
-    CudaBuffer tmp_fp32{0};
+    // CudaBuffer out_fp32{0};                 //  <-- new (stores bias in FP32)
+    // CudaBuffer tmp_fp32{0};
 
-    explicit TimeEmbeddingBF16(int d, int mlp = -1)
-        : dim(d), proj1(d, mlp < 0 ? 4 * d : mlp),
-          proj2(mlp < 0 ? 4 * d : mlp, d) {}
+    // proj1(d, mlp < 0 ? 4 * d : mlp),
+    // proj2(mlp < 0 ? 4 * d : mlp, d) 
+    TimeEmbeddingBF16(int d, int mlp = -1): dim(d) {}
 
-    /**
-     * t_host – host int32 array of length B
-     * out     – device bf16 [B, dim]
-     */
     void forward(const int32_t *t_host, int B,
-                 __nv_bfloat16 *out_bf16,     // destination
-                 cudaStream_t  s) {
-        /* ---------- sinusoid in FP32 ---------- */
-        std::vector<float> h(B * dim);
-        int half = dim / 2;
+                 __nv_bfloat16 *out,     // [B, dim]  (device)
+                 cudaStream_t  s)
+    {
+        /* ---------- 1. raw sinusoid on host (FP32) ---------- */
+        std::vector<__nv_bfloat16> h(B * dim);
+        const int half = dim / 2;
+
         for (int b = 0; b < B; ++b) {
             float tt = float(t_host[b]);
             for (int i = 0; i < half; ++i) {
                 float f = expf(-logf(10000.f) * i / (half - 1));
-                h[b * dim + i]        = sinf(tt * f);
-                h[b * dim + half + i] = cosf(tt * f);
+                h[b * dim + i]        = __float2bfloat16(sinf(tt * f));
+                h[b * dim + half + i] = __float2bfloat16(cosf(tt * f));
             }
-            if (dim & 1) h[b * dim + dim - 1] = 0.f;
+            if (dim & 1) h[b * dim + dim - 1] = __float2bfloat16(0.f);
         }
-        ensure_size(out_fp32, h.size() * sizeof(float));
-        cudaMemcpyAsync(out_fp32.data, h.data(), out_fp32.size,
-                        cudaMemcpyHostToDevice, s);
+        checkCuda(cudaMemcpyAsync(out, h.data(),
+                                  h.size() * sizeof(__nv_bfloat16),
+                                  cudaMemcpyHostToDevice, s));
 
-        ensure_size(tmp_bf16, out_fp32.size / 2);            // same #elements, half the bytes
-        dm::fp32_to_bf16(reinterpret_cast<float*>(out_fp32.data),
-                         reinterpret_cast<__nv_bfloat16*>(tmp_bf16.data),
-                         size_t(B) * dim, s);
+        /* ---------- 2. proj-1 → SiLU → proj-2 --------------- */
+        // ensure_size(tmp, size_t(B) * proj1->out_f * sizeof(__nv_bfloat16));
+        tmp = std::make_shared<CudaBuffer>(size_t(B) * proj1->out_f * sizeof(__nv_bfloat16));
 
-        /* ---------- proj-1 ---------- */
-        ensure_size(tmp_fp32, size_t(B) * proj1.out_f * sizeof(float));
         for (int b = 0; b < B; ++b)
-            proj1.forward32(                               // FP32 out
-                reinterpret_cast<__nv_bfloat16*>(tmp_bf16.data) + b * dim,
-                reinterpret_cast<float*>(tmp_fp32.data)    + b * proj1.out_f, s);
+            proj1->forward(out + b * dim,
+                          reinterpret_cast<__nv_bfloat16*>(tmp->data) + b * proj1->out_f,
+                          s);
 
-        dm::silu_inplace32(                         // ← new FP32 SiLU
-                reinterpret_cast<float*>(tmp_fp32.data),
-                size_t(B) * proj1.out_f, s);
+        silu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp->data),
+                     size_t(B) * proj1->out_f, s);
 
-        /* ---------- proj-2 ---------- */
         for (int b = 0; b < B; ++b)
-            proj2.forward32(
-                reinterpret_cast<__nv_bfloat16*>(tmp_fp32.data) + b * proj1.out_f,
-                reinterpret_cast<float*>(out_fp32.data) + b * dim, s);
-
-        /* ---------- one cast to BF16 ---------- */
-        dm::fp32_to_bf16(reinterpret_cast<float*>(out_fp32.data),
-                        out_bf16, size_t(B) * dim, s);
+            proj2->forward(reinterpret_cast<__nv_bfloat16*>(tmp->data) + b * proj1->out_f,
+                          out + b * dim, s);
     }
 
-    void set_weights(std::shared_ptr<CudaBuffer> w1, std::shared_ptr<CudaBuffer> b1,
-                     std::shared_ptr<CudaBuffer> w2, std::shared_ptr<CudaBuffer> b2) {
-        proj1.set_weights(std::move(w1), std::move(b1));
-        proj2.set_weights(std::move(w2), std::move(b2));
-    }
+    private:
+        std::shared_ptr<CudaBuffer> tmp;
 };
 

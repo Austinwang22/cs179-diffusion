@@ -15,7 +15,7 @@ template<Qwen2Size QWEN2_SIZE>
 class Qwen2Model {
     cudaStream_t stream;
 public:
-    using C     = Qwen2Config<QWEN2_SIZE>;
+    u1ing C     = Qwen2Config<QWEN2_SIZE>;
     using Layer = Qwen2Layer<QWEN2_SIZE>;
 
     Qwen2Model() {

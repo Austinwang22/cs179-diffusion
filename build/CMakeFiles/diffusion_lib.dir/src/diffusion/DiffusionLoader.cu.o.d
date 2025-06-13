@@ -336,7 +336,30 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o : /home/bkwang/c
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.hpp \
     /home/bkwang/cs179-diffusion/src/diffusion/../CudaBuffer.cuh \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionConfig.h \
-    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h \
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionUNet.cuh \
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLayers.cuh \
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_v2.h \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_api.h \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cuComplex.h \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cusolverDn.h \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cusolver_common.h \
+    /usr/include/inttypes.h \
+    /usr/local/cuda-12.5/targets/x86_64-linux/include/cufft.h \
+    /usr/include/cudnn.h \
+    /usr/include/cudnn_version.h \
+    /usr/include/cudnn_ops_infer.h \
+    /usr/include/cudnn_ops_train.h \
+    /usr/include/cudnn_adv_infer.h \
+    /usr/include/cudnn_adv_train.h \
+    /usr/include/cudnn_cnn_infer.h \
+    /usr/include/cudnn_cnn_train.h \
+    /usr/include/cudnn_backend.h \
+    /home/bkwang/cs179-diffusion/src/diffusion/../ErrorCheck.h \
+    /usr/include/c++/11/iostream \
+    /usr/include/c++/11/istream \
+    /usr/include/c++/11/bits/istream.tcc \
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh \
     /home/bkwang/cs179-diffusion/src/diffusion/../vendor/safetensors.hh \
     /usr/include/c++/11/map \
     /usr/include/c++/11/bits/stl_tree.h \
@@ -344,9 +367,5 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o : /home/bkwang/c
     /usr/include/c++/11/bits/stl_map.h \
     /usr/include/c++/11/bits/stl_multimap.h \
     /usr/include/c++/11/bits/erase_if.h \
-    /home/bkwang/cs179-diffusion/src/diffusion/../ErrorCheck.h \
-    /usr/include/c++/11/iostream \
-    /usr/include/c++/11/istream \
-    /usr/include/c++/11/bits/istream.tcc \
     /home/bkwang/cs179-diffusion/src/diffusion/../HostBuffer.h \
     /usr/include/c++/11/cstddef

@@ -352,8 +352,11 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/bkwang/cs
   /home/bkwang/cs179-diffusion/src/HostBuffer.h \
   /home/bkwang/cs179-diffusion/src/vendor/safetensors.hh \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionConfig.h \
+  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh \
+  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh \
+  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLayers.cuh \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.h \
-  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h \
+  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionUNet.cuh \
   /usr/include/alloca.h \
   /usr/include/asm-generic/errno-base.h \
   /usr/include/asm-generic/errno.h \
@@ -510,10 +513,20 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/bkwang/cs
   /usr/include/c++/11/utility \
   /usr/include/c++/11/vector \
   /usr/include/ctype.h \
+  /usr/include/cudnn.h \
+  /usr/include/cudnn_adv_infer.h \
+  /usr/include/cudnn_adv_train.h \
+  /usr/include/cudnn_backend.h \
+  /usr/include/cudnn_cnn_infer.h \
+  /usr/include/cudnn_cnn_train.h \
+  /usr/include/cudnn_ops_infer.h \
+  /usr/include/cudnn_ops_train.h \
+  /usr/include/cudnn_version.h \
   /usr/include/endian.h \
   /usr/include/errno.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
+  /usr/include/inttypes.h \
   /usr/include/limits.h \
   /usr/include/linux/close_range.h \
   /usr/include/linux/errno.h \
@@ -658,6 +671,9 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/bkwang/cs
   /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/sm_80_rt.hpp \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/sm_90_rt.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/sm_90_rt.hpp \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cuComplex.h \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_api.h \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_v2.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.hpp \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_device_runtime_api.h \
@@ -665,6 +681,9 @@ CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/bkwang/cs
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_fp16.hpp \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_runtime.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_runtime_api.h \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cufft.h \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cusolverDn.h \
+  /usr/local/cuda-12.5/targets/x86_64-linux/include/cusolver_common.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/device_atomic_functions.h \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/device_atomic_functions.hpp \
   /usr/local/cuda-12.5/targets/x86_64-linux/include/device_launch_parameters.h \
@@ -1005,9 +1024,19 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 
 /usr/local/cuda-12.5/targets/x86_64-linux/include/nv/detail/__preprocessor:
 
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cusolver_common.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cufft.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cusolverDn.h:
+
 /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.hpp:
 
 /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_v2.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_api.h:
 
 /usr/include/x86_64-linux-gnu/sys/syscall.h:
 
@@ -1022,6 +1051,22 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 /usr/include/x86_64-linux-gnu/asm/unistd_64.h:
 
 /usr/include/linux/close_range.h:
+
+/usr/include/inttypes.h:
+
+/usr/include/cudnn_version.h:
+
+/usr/include/cudnn_ops_train.h:
+
+/usr/include/cudnn_ops_infer.h:
+
+/usr/include/cudnn_cnn_train.h:
+
+/usr/include/cudnn_adv_train.h:
+
+/usr/include/cudnn_adv_infer.h:
+
+/usr/include/cudnn.h:
 
 /usr/include/c++/11/vector:
 
@@ -1079,7 +1124,11 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 
 /usr/include/c++/11/backward/auto_ptr.h:
 
-/home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h:
+/home/bkwang/cs179-diffusion/src/diffusion/DiffusionLayers.cuh:
+
+/home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh:
+
+/home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh:
 
 /home/bkwang/cs179-diffusion/src/vendor/safetensors.hh:
 
@@ -1208,6 +1257,8 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/device_double_functions.hpp:
 
 /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/device_functions.h:
+
+/usr/include/cudnn_cnn_infer.h:
 
 /usr/include/c++/11/cstdio:
 
@@ -1491,6 +1542,8 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 
 /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/sm_80_rt.hpp:
 
+/home/bkwang/cs179-diffusion/src/diffusion/DiffusionUNet.cuh:
+
 /usr/include/x86_64-linux-gnu/bits/floatn-common.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/wint_t.h:
@@ -1568,6 +1621,8 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 /usr/include/x86_64-linux-gnu/bits/sched.h:
 
 /usr/include/x86_64-linux-gnu/bits/getopt_posix.h:
+
+/usr/include/cudnn_backend.h:
 
 /usr/include/time.h:
 
@@ -1670,6 +1725,8 @@ CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/cs1
 /usr/include/x86_64-linux-gnu/c++/11/bits/error_constants.h:
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/gthr-default.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/cuComplex.h:
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/gthr.h:
 

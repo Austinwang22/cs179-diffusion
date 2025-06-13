@@ -142,19 +142,6 @@ diffusion/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion.dir/build.make CMakeFiles/diffusion.dir/build
 .PHONY : diffusion/fast
 
-#=============================================================================
-# Target rules for targets named tests
-
-# Build rule for target.
-tests: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests
-.PHONY : tests
-
-# fast build rule for target.
-tests/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/build
-.PHONY : tests/fast
-
 src/CudaBuffer.o: src/CudaBuffer.cu.o
 .PHONY : src/CudaBuffer.o
 
@@ -251,30 +238,6 @@ src/main.cu.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion.dir/build.make CMakeFiles/diffusion.dir/src/main.cu.s
 .PHONY : src/main.cu.s
 
-src/tests.o: src/tests.cu.o
-.PHONY : src/tests.o
-
-# target to build an object file
-src/tests.cu.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/src/tests.cu.o
-.PHONY : src/tests.cu.o
-
-src/tests.i: src/tests.cu.i
-.PHONY : src/tests.i
-
-# target to preprocess a source file
-src/tests.cu.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/src/tests.cu.i
-.PHONY : src/tests.cu.i
-
-src/tests.s: src/tests.cu.s
-.PHONY : src/tests.s
-
-# target to generate assembly for a file
-src/tests.cu.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/src/tests.cu.s
-.PHONY : src/tests.cu.s
-
 src/vendor/safetensors_impl.o: src/vendor/safetensors_impl.cpp.o
 .PHONY : src/vendor/safetensors_impl.o
 
@@ -309,7 +272,6 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... diffusion"
 	@echo "... diffusion_lib"
-	@echo "... tests"
 	@echo "... src/CudaBuffer.o"
 	@echo "... src/CudaBuffer.i"
 	@echo "... src/CudaBuffer.s"
@@ -322,9 +284,6 @@ help:
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"
-	@echo "... src/tests.o"
-	@echo "... src/tests.i"
-	@echo "... src/tests.s"
 	@echo "... src/vendor/safetensors_impl.o"
 	@echo "... src/vendor/safetensors_impl.i"
 	@echo "... src/vendor/safetensors_impl.s"

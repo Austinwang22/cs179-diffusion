@@ -4,14 +4,15 @@
 CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu \
   /home/bkwang/cs179-diffusion/src/CudaBuffer.cuh \
   /home/bkwang/cs179-diffusion/src/ErrorCheck.h \
+  /home/bkwang/cs179-diffusion/src/HostBuffer.h \
   /home/bkwang/cs179-diffusion/src/vendor/safetensors.hh \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionConfig.h \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLayers.cuh \
+  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.cu \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.h \
   /home/bkwang/cs179-diffusion/src/diffusion/DiffusionUNet.cuh \
-  /home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h \
   /usr/include/alloca.h \
   /usr/include/asm-generic/errno-base.h \
   /usr/include/asm-generic/errno.h \
@@ -111,6 +112,7 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
   /usr/include/c++/11/cmath \
   /usr/include/c++/11/compare \
   /usr/include/c++/11/concepts \
+  /usr/include/c++/11/cstddef \
   /usr/include/c++/11/cstdint \
   /usr/include/c++/11/cstdio \
   /usr/include/c++/11/cstdlib \
@@ -473,8 +475,6 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/ctype_inline.h:
 
-/usr/include/x86_64-linux-gnu/c++/11/bits/ctype_base.h:
-
 /usr/include/x86_64-linux-gnu/c++/11/bits/cpu_defines.h:
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/c++locale.h:
@@ -515,11 +515,9 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /usr/include/x86_64-linux-gnu/bits/types/error_t.h:
 
-/usr/include/c++/11/ext/type_traits.h:
+/usr/include/x86_64-linux-gnu/bits/types/clock_t.h:
 
-/home/bkwang/cs179-diffusion/src/ErrorCheck.h:
-
-/usr/include/c++/11/pstl/glue_memory_defs.h:
+/usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
 
 /usr/include/c++/11/exception:
 
@@ -597,11 +595,11 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /usr/include/c++/11/cstdlib:
 
+/usr/include/c++/11/bit:
+
 /usr/include/c++/11/numbers:
 
 /usr/include/assert.h:
-
-/usr/include/c++/11/bit:
 
 /usr/include/c++/11/bits/std_mutex.h:
 
@@ -643,11 +641,15 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /usr/include/c++/11/tr1/special_function_util.h:
 
+/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
+
+/usr/include/c++/11/cstdint:
+
 /usr/include/c++/11/bits/uniform_int_dist.h:
 
 /usr/include/c++/11/bits/basic_ios.h:
 
-/home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h:
+/usr/include/c++/11/cstddef:
 
 /usr/include/c++/11/bits/stl_vector.h:
 
@@ -687,6 +689,24 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh:
 
+/usr/include/syscall.h:
+
+/usr/include/c++/11/bits/stl_tree.h:
+
+/usr/include/c++/11/tuple:
+
+/usr/include/x86_64-linux-gnu/sys/single_threaded.h:
+
+/usr/include/c++/11/type_traits:
+
+/usr/include/c++/11/bits/specfun.h:
+
+/usr/include/asm-generic/errno-base.h:
+
+/usr/local/cuda-12.5/targets/x86_64-linux/include/channel_descriptor.h:
+
+/usr/include/c++/11/bits/char_traits.h:
+
 /usr/include/c++/11/backward/binders.h:
 
 /usr/include/x86_64-linux-gnu/bits/time.h:
@@ -713,6 +733,18 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /home/bkwang/cs179-diffusion/src/CudaBuffer.cuh:
 
+/usr/include/c++/11/bits/std_abs.h:
+
+/usr/include/c++/11/bits/ranges_base.h:
+
+/usr/include/c++/11/bits/stl_heap.h:
+
+/usr/include/x86_64-linux-gnu/c++/11/bits/os_defines.h:
+
+/usr/include/x86_64-linux-gnu/bits/environments.h:
+
+/usr/include/c++/11/bits/exception_defines.h:
+
 /usr/include/c++/11/bits/atomic_base.h:
 
 /usr/local/cuda-12.5/targets/x86_64-linux/include/device_atomic_functions.hpp:
@@ -727,37 +759,29 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 
 /home/bkwang/cs179-diffusion/src/main.cu:
 
+/usr/include/c++/11/bits/shared_ptr_atomic.h:
+
+/usr/include/x86_64-linux-gnu/c++/11/bits/ctype_base.h:
+
+/home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.cu:
+
+/usr/include/alloca.h:
+
 /usr/include/c++/11/bits/allocated_ptr.h:
 
 /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h:
 
-/usr/include/c++/11/bits/shared_ptr_atomic.h:
+/usr/include/c++/11/tr1/poly_hermite.tcc:
 
-/usr/include/alloca.h:
+/home/bkwang/cs179-diffusion/src/ErrorCheck.h:
 
-/usr/include/syscall.h:
+/usr/include/c++/11/ext/type_traits.h:
 
-/usr/include/c++/11/bits/stl_tree.h:
-
-/usr/include/c++/11/tuple:
-
-/usr/include/x86_64-linux-gnu/sys/single_threaded.h:
-
-/usr/include/c++/11/type_traits:
+/usr/include/c++/11/pstl/glue_memory_defs.h:
 
 /usr/include/c++/11/bits/postypes.h:
 
 /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h:
-
-/usr/include/c++/11/tr1/poly_hermite.tcc:
-
-/usr/include/c++/11/bits/specfun.h:
-
-/usr/include/asm-generic/errno-base.h:
-
-/usr/local/cuda-12.5/targets/x86_64-linux/include/channel_descriptor.h:
-
-/usr/include/c++/11/bits/char_traits.h:
 
 /usr/include/c++/11/bits/basic_string.tcc:
 
@@ -788,18 +812,6 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/sm_70_rt.hpp:
 
 /usr/include/pthread.h:
-
-/usr/include/c++/11/bits/std_abs.h:
-
-/usr/include/c++/11/bits/ranges_base.h:
-
-/usr/include/c++/11/bits/stl_heap.h:
-
-/usr/include/x86_64-linux-gnu/c++/11/bits/os_defines.h:
-
-/usr/include/x86_64-linux-gnu/bits/environments.h:
-
-/usr/include/c++/11/bits/exception_defines.h:
 
 /usr/include/c++/11/bits/allocator.h:
 
@@ -862,10 +874,6 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 /usr/include/x86_64-linux-gnu/gnu/stubs-64.h:
 
 /usr/include/c++/11/tr1/gamma.tcc:
-
-/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
-
-/usr/include/c++/11/cstdint:
 
 /usr/include/c++/11/bits/stl_algo.h:
 
@@ -966,6 +974,8 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 /usr/include/c++/11/tr1/legendre_function.tcc:
 
 /usr/include/x86_64-linux-gnu/bits/pthread_stack_min-dynamic.h:
+
+/home/bkwang/cs179-diffusion/src/HostBuffer.h:
 
 /usr/include/c++/11/bits/basic_string.h:
 
@@ -1108,7 +1118,3 @@ CMakeFiles/diffusion.dir/src/main.cu.o: /home/bkwang/cs179-diffusion/src/main.cu
 /usr/include/x86_64-linux-gnu/bits/time64.h:
 
 /usr/include/x86_64-linux-gnu/bits/timesize.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/clock_t.h:

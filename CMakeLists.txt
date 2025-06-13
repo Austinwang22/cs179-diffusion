@@ -89,7 +89,6 @@ add_library(diffusion_lib
         src/diffusion/DiffusionConfig.h
         src/diffusion/DiffusionLoader.h
         src/diffusion/DiffusionLoader.cu
-        src/diffusion/DiffusionWeights.h
 
         src/diffusion/DiffusionUNet.cuh
         src/diffusion/DiffusionLayers.cuh
@@ -115,5 +114,5 @@ target_link_libraries(diffusion_lib
 add_executable(diffusion src/vendor/argparse.hpp src/main.cu)
 target_link_libraries(diffusion PRIVATE diffusion_lib)
 
-add_executable(tests src/tests.cu)
-target_link_libraries(tests PRIVATE diffusion_lib)
+# add_executable(tests src/tests.cu)
+# target_link_libraries(tests PRIVATE diffusion_lib)

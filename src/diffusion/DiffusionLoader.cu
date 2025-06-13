@@ -5,17 +5,18 @@
 #include "../HostBuffer.h"
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
-auto dump_bf16 = [](const char* tag, const __nv_bfloat16* dev, int n = 16)
-{
-    std::vector<__nv_bfloat16> h(n);
-    checkCuda(cudaMemcpy(h.data(), dev, n * sizeof(__nv_bfloat16),
-                         cudaMemcpyDeviceToHost));
-    std::cout << tag << " : ";
-    for (int i = 0; i < n; ++i)
-        std::cout << __bfloat162float(h[i]) << ' ';
-    std::cout << '\n';
-};
+// auto dump_bf16 = [](const char* tag, const __nv_bfloat16* dev, int n = 16)
+// {
+//     std::vector<__nv_bfloat16> h(n);
+//     checkCuda(cudaMemcpy(h.data(), dev, n * sizeof(__nv_bfloat16),
+//                          cudaMemcpyDeviceToHost));
+//     std::cout << tag << " : ";
+//     for (int i = 0; i < n; ++i)
+//         std::cout << __bfloat162float(h[i]) << ' ';
+//     std::cout << '\n';
+// };
 
 // ------------------------------------------------------------------
 // util: decide model root directory
@@ -33,144 +34,168 @@ std::string DiffusionLoader::get_model_dir()
 // ------------------------------------------------------------------
 // util: locate tensor, shape-check, upload to GPU
 // ------------------------------------------------------------------
-std::shared_ptr<CudaBuffer> DiffusionLoader::load_bf16_tensor(safetensors::safetensors_t& st,
-                                  const std::string& name,
-                                  size_t d0, size_t d1,
-                                  size_t d2, size_t d3)
+
+std::shared_ptr<const CudaBuffer>
+DiffusionLoader::load_bf16_tensor(safetensors::safetensors_t &st,
+                 const std::string &name,
+                 const std::vector<size_t> &expected)
 {
+    // 1. locate tensor entry -------------------------------------------------
     safetensors::tensor_t t;
-    bool found=false;
-    for (size_t i=0;i<st.tensors.size();++i) {
-        std::string k = st.tensors.keys()[i];
-        if (k==name) { st.tensors.at(i,&t); found=true; break; }
+    bool found = false;
+    for (size_t i = 0; i < st.tensors.size(); ++i) {
+        if (st.tensors.keys()[i] == name) {
+            st.tensors.at(i, &t);   // fills struct
+            found = true; break;
+        }
     }
     if (!found)
-        throw std::runtime_error("tensor not found: "+name);
+        throw std::runtime_error("tensor not found : " + name);
 
+    // 2. dtype check ---------------------------------------------------------
     if (t.dtype != safetensors::kBFLOAT16)
-        throw std::runtime_error("tensor "+name+" not BF16");
+        throw std::runtime_error("tensor " + name + " must be BF16");
 
-    // ---- shape check (allow unused dims == 0) --------------------
-    // ------------------------------------------------------------------
-    // 1.  tweak the helper so d1 == 0 means “1-D tensor – no 2nd dim check”
-    // ------------------------------------------------------------------
-    auto bad_shape=[&]{
-        std::string got="(";
-        for (auto s: t.shape) got+=std::to_string(s)+",";
-        got.back()=')';
-        throw std::runtime_error("shape mismatch for "+name+" got "+got);
-    };
-    if (t.shape[0] != d0) bad_shape();
-    if (d1 && (t.shape.size() < 2 || t.shape[1] != d1)) bad_shape();
-    if (d2 && (t.shape.size() < 3 || t.shape[2] != d2)) bad_shape();
-    if (d3 && (t.shape.size() < 4 || t.shape[3] != d3)) bad_shape();
+    // 3. shape check (0 == wildcard) ----------------------------------------
+    if (t.shape.size() != expected.size())
+        throw std::runtime_error("rank mismatch for " + name);
+    for (size_t i = 0; i < expected.size(); ++i) {
+        if (expected[i] && expected[i] != t.shape[i]) {
+            std::string got = "("; for (auto s: t.shape) got += std::to_string(s)+","; got.back() = ')';
+            throw std::runtime_error("shape mismatch for " + name + ", expected index " + std::to_string(i));
+        }
+    }
 
+    // 4. copy to GPU ---------------------------------------------------------
+    size_t numel = 1; for (auto s : t.shape) numel *= s;
+    size_t bytes = numel * sizeof(__nv_bfloat16);
 
-    // ---- copy bytes ------------------------------------------------
-    size_t numel = 1;
-    for (auto s: t.shape) numel*=s;
-    size_t bytes = numel*sizeof(__nv_bfloat16);
-
-    const uint8_t* src = st.databuffer_addr + t.data_offsets[0];
+    const uint8_t *src = st.databuffer_addr + t.data_offsets[0];
     auto dst = std::make_shared<CudaBuffer>(bytes);
     checkCuda(cudaMemcpy(dst->data, src, bytes, cudaMemcpyDefault));
 
-    // dump_bf16(name.c_str(),
-    //           static_cast<const __nv_bfloat16*>(dst->data),
-    //           std::min<size_t>(numel, 16));
-
-    return dst;
+    return std::static_pointer_cast<const CudaBuffer>(dst);
 }
 
 // ------------------------------------------------------------------
 // main public loader
 // ------------------------------------------------------------------
-DiffusionWeights DiffusionLoader::load_diffusion_weights(const std::string& safet_file)
+std::shared_ptr<UNetBF16> DiffusionLoader::load_diffusion_weights(const std::string& safet_file)
 {
-    DiffusionWeights W;
+    // DiffusionWeights W;
 
     // ---------- open safetensors ----------------------------------
-    safetensors::safetensors_t st;
     std::string warn, err;
-    if (!safetensors::mmap_from_file(safet_file, &st, &warn, &err))
-        throw std::runtime_error("safetensors: "+err);
-    if (!warn.empty()) std::cerr<<"safetensors warn: "<<warn<<'\n';
-    if (!safetensors::validate_data_offsets(st, err))
-        throw std::runtime_error("safetensors: invalid offsets: "+err);
+    safetensors::safetensors_t st;
+    bool ret = safetensors::mmap_from_file(safet_file, &st, &warn, &err);
+    if (!warn.empty()) {
+        std::cerr << "safetensors warning: " << warn << std::endl;
+    }
+    if (!ret) {
+        throw std::runtime_error("safetensors error: " + err);
+    }
+    if (!safetensors::validate_data_offsets(st, err)) {
+        throw std::runtime_error("safetensors: invalid data offsets: " + err);
+    }
 
     // ---------- constants from config -----------------------------
     constexpr int T = DiffusionConfig::t_emb_dim;   // 128
     constexpr int C0 = DiffusionConfig::enc_channels[1];   // 64
     constexpr int C1 = DiffusionConfig::enc_channels[2];   // 128
 
-    constexpr int DEC0_OUT = DiffusionConfig::dec_channels[0];   // 128
-    constexpr int DEC1_OUT = DiffusionConfig::dec_channels[1];   //  64
-    constexpr int DEC0_IN  = C1 + C1;               // 256  (128 skip + 128 in)
-    constexpr int DEC1_IN  = DEC0_OUT + C0;         // 192  (128  + 64)
+    constexpr int D0O = DiffusionConfig::dec_channels[0];   // 128
+    constexpr int D1O = DiffusionConfig::dec_channels[1];   //  64
 
-    // ---------- table-drive the loads -----------------------------
-    struct Entry { std::shared_ptr<CudaBuffer>* field;
-                   std::string key;  int d0,d1,d2,d3; };
+    // // ---------- table-drive the loads -----------------------------
+    // struct Entry { std::shared_ptr<const CudaBuffer> *field;
+    //                std::string key;  int d0,d1,d2,d3; };
+    // unet model
+    auto net = std::make_shared<UNetBF16>(28);
 
-    // ---- time MLP
-    const Entry tbl[] = {
-        // ---------- time embedding ------------------------------------
-        { &W.t_proj1_w, "unet.time_emb.mlp.0.weight", 4*T, T },
-        { &W.t_proj1_b, "unet.time_emb.mlp.0.bias",   4*T, 0    },
-        { &W.t_proj2_w, "unet.time_emb.mlp.2.weight", T,   4*T },
-        { &W.t_proj2_b, "unet.time_emb.mlp.2.bias",   T,   0    },
+    // ---- Time embedding ------------------------
+    net->timeEmb = std::make_shared<TimeEmbeddingBF16>(T);
+    net->timeEmb->proj1 = std::make_shared<LinearBF16>(T, 4*T);
+    net->timeEmb->proj2 = std::make_shared<LinearBF16>(4*T, T);
+    net->timeEmb->proj1->W_ = load_bf16_tensor(st, "unet.time_emb.mlp.0.weight", std::vector<size_t>{4*T, T});
+    net->timeEmb->proj1->b_ = load_bf16_tensor(st, "unet.time_emb.mlp.0.bias",   std::vector<size_t>{4*T});
+    net->timeEmb->proj2->W_ = load_bf16_tensor(st, "unet.time_emb.mlp.2.weight", std::vector<size_t>{T, 4*T});
+    net->timeEmb->proj2->b_ = load_bf16_tensor(st, "unet.time_emb.mlp.2.bias",   std::vector<size_t>{T});
 
-        // ---------- encoder-0 -----------------------------------------
-        { &W.enc[0].conv1_w,  "unet.enc_blocks.0.conv1.weight", C0, 1, 3,3 },
-        { &W.enc[0].conv1_b,  "unet.enc_blocks.0.conv1.bias",   C0, 0      },
-        { &W.enc[0].conv2_w,  "unet.enc_blocks.0.conv2.weight", C0, C0,3,3 },
-        { &W.enc[0].conv2_b,  "unet.enc_blocks.0.conv2.bias",   C0, 0      },
-        { &W.enc[0].t_proj_w, "unet.enc_blocks.0.time_proj.weight", C0, T  },
-        { &W.enc[0].t_proj_b, "unet.enc_blocks.0.time_proj.bias",   C0, 0  },
+    // ---- Encoder‑0 -----------------------------
+    net->enc0 = std::make_shared<EncoderBlockBF16>();
+    net->enc0->conv1 = std::make_shared<Conv2dBF16>(1,  C0);
+    net->enc0->conv1->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv1.weight", std::vector<size_t>{C0, 1, 3, 3});
+    net->enc0->conv1->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv1.bias",   std::vector<size_t>{C0});
+    
+    net->enc0->conv2 = std::make_shared<Conv2dBF16>(C0, C0);
+    net->enc0->conv2->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv2.weight", std::vector<size_t>{C0, C0, 3, 3});
+    net->enc0->conv2->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv2.bias",   std::vector<size_t>{C0});
+    
+    net->enc0->t_proj = std::make_shared<LinearBF16>(T, C0);
+    net->enc0->t_proj->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.time_proj.weight", std::vector<size_t>{C0, T});
+    net->enc0->t_proj->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.time_proj.bias",   std::vector<size_t>{C0});
 
-        // ---------- encoder-1 -----------------------------------------
-        { &W.enc[1].conv1_w,  "unet.enc_blocks.1.conv1.weight", C1, C0,3,3 },
-        { &W.enc[1].conv1_b,  "unet.enc_blocks.1.conv1.bias",   C1, 0      },
-        { &W.enc[1].conv2_w,  "unet.enc_blocks.1.conv2.weight", C1, C1,3,3 },
-        { &W.enc[1].conv2_b,  "unet.enc_blocks.1.conv2.bias",   C1, 0      },
-        { &W.enc[1].t_proj_w, "unet.enc_blocks.1.time_proj.weight", C1, T  },
-        { &W.enc[1].t_proj_b, "unet.enc_blocks.1.time_proj.bias",   C1, 0  },
+    // ---- Encoder‑1 -----------------------------
+    net->enc1 = std::make_shared<EncoderBlockBF16>();
+    net->enc1->conv1 = std::make_shared<Conv2dBF16>(C0, C1);
+    net->enc1->conv1->W_ = load_bf16_tensor(st, "unet.enc_blocks.1.conv1.weight", std::vector<size_t>{C1, C0, 3, 3});
+    net->enc1->conv1->b_ = load_bf16_tensor(st, "unet.enc_blocks.1.conv1.bias",   std::vector<size_t>{C1});
+    net->enc1->conv2 = std::make_shared<Conv2dBF16>(C1, C1);
+    net->enc1->conv2->W_ = load_bf16_tensor(st, "unet.enc_blocks.1.conv2.weight", std::vector<size_t>{C1, C1, 3, 3});
+    net->enc1->conv2->b_ = load_bf16_tensor(st, "unet.enc_blocks.1.conv2.bias",   std::vector<size_t>{C1});
+    net->enc1->t_proj = std::make_shared<LinearBF16>(T, C1);
+    net->enc1->t_proj->W_ = load_bf16_tensor(st, "unet.enc_blocks.1.time_proj.weight", std::vector<size_t>{C1, T});
+    net->enc1->t_proj->b_ = load_bf16_tensor(st, "unet.enc_blocks.1.time_proj.bias",   std::vector<size_t>{C1});
 
-        // ---------- bottleneck ----------------------------------------
-        { &W.bott1_w,       "unet.bottleneck.conv1.weight", C1, C1,3,3 },
-        { &W.bott1_b,       "unet.bottleneck.conv1.bias",   C1, 0      },
-        { &W.bott2_w,       "unet.bottleneck.conv2.weight", C1, C1,3,3 },
-        { &W.bott2_b,       "unet.bottleneck.conv2.bias",   C1, 0      },
-        { &W.bott_t_w,      "unet.bottleneck.time_proj.weight", C1, T  },
-        { &W.bott_t_b,      "unet.bottleneck.time_proj.bias",   C1, 0  },
+    // ---- Bottleneck ----------------------------
+    net->bott = std::make_shared<BottleneckBF16>();
+    net->bott->conv1 = std::make_shared<Conv2dBF16>(C1, C1);
+    net->bott->conv1->W_ = load_bf16_tensor(st, "unet.bottleneck.conv1.weight", std::vector<size_t>{C1, C1, 3, 3});
+    net->bott->conv1->b_ = load_bf16_tensor(st, "unet.bottleneck.conv1.bias",   std::vector<size_t>{C1});
+    net->bott->conv2 = std::make_shared<Conv2dBF16>(C1, C1);
+    net->bott->conv2->W_ = load_bf16_tensor(st, "unet.bottleneck.conv2.weight", std::vector<size_t>{C1, C1, 3, 3});
+    net->bott->conv2->b_ = load_bf16_tensor(st, "unet.bottleneck.conv2.bias",   std::vector<size_t>{C1});
+    net->bott->t_proj = std::make_shared<LinearBF16>(T, C1);
+    net->bott->t_proj->W_ = load_bf16_tensor(st, "unet.bottleneck.time_proj.weight", std::vector<size_t>{C1, T});
+    net->bott->t_proj->b_ = load_bf16_tensor(st, "unet.bottleneck.time_proj.bias",   std::vector<size_t>{C1});
 
-        // ---------- decoder block 0 -----------------------------------
-        { &W.dec[0].conv1_w,  "unet.dec_blocks.0.conv1.weight", DEC0_OUT, DEC0_IN,3,3 },
-        { &W.dec[0].conv1_b,  "unet.dec_blocks.0.conv1.bias",   DEC0_OUT, 0        },
-        { &W.dec[0].conv2_w,  "unet.dec_blocks.0.conv2.weight", DEC0_OUT, DEC0_OUT,3,3 },
-        { &W.dec[0].conv2_b,  "unet.dec_blocks.0.conv2.bias",   DEC0_OUT, 0        },
-        { &W.dec[0].t_proj_w, "unet.dec_blocks.0.time_proj.weight", DEC0_OUT, T },
-        { &W.dec[0].t_proj_b, "unet.dec_blocks.0.time_proj.bias",   DEC0_OUT, 0 },
-        { &W.dec[0].up_w,     "unet.dec_blocks.0.upsample.weight",  DEC0_OUT, DEC0_OUT,2,2 },
-        { &W.dec[0].up_b,     "unet.dec_blocks.0.upsample.bias",    DEC0_OUT, 0        },
+    // ---- Decoder‑0 -----------------------------
+    net->dec0 = std::make_shared<DecoderBlockBF16>(D0O);
+    net->dec0->conv1 = std::make_shared<Conv2dBF16>(C1+C1, D0O);
+    net->dec0->conv1->W_ = load_bf16_tensor(st, "unet.dec_blocks.0.conv1.weight", std::vector<size_t>{D0O, C1+C1, 3, 3});
+    net->dec0->conv1->b_ = load_bf16_tensor(st, "unet.dec_blocks.0.conv1.bias",   std::vector<size_t>{D0O});
 
-        // ---------- decoder block 1 -----------------------------------
-        { &W.dec[1].conv1_w,  "unet.dec_blocks.1.conv1.weight", DEC1_OUT, DEC1_IN,3,3 },
-        { &W.dec[1].conv1_b,  "unet.dec_blocks.1.conv1.bias",   DEC1_OUT, 0        },
-        { &W.dec[1].conv2_w,  "unet.dec_blocks.1.conv2.weight", DEC1_OUT, DEC1_OUT,3,3 },
-        { &W.dec[1].conv2_b,  "unet.dec_blocks.1.conv2.bias",   DEC1_OUT, 0        },
-        { &W.dec[1].t_proj_w, "unet.dec_blocks.1.time_proj.weight", DEC1_OUT, T },
-        { &W.dec[1].t_proj_b, "unet.dec_blocks.1.time_proj.bias",   DEC1_OUT, 0 },
-        { &W.dec[1].up_w,     "unet.dec_blocks.1.upsample.weight",  DEC1_OUT, DEC1_OUT,2,2 },
-        { &W.dec[1].up_b,     "unet.dec_blocks.1.upsample.bias",    DEC1_OUT, 0        },
+    net->dec0->conv2 = std::make_shared<Conv2dBF16>(D0O, D0O);
+    net->dec0->conv2->W_ = load_bf16_tensor(st, "unet.dec_blocks.0.conv2.weight", std::vector<size_t>{D0O, D0O, 3, 3});
+    net->dec0->conv2->b_ = load_bf16_tensor(st, "unet.dec_blocks.0.conv2.bias",   std::vector<size_t>{D0O});
+    net->dec0->up = std::make_shared<ConvTrans2dBF16>(D0O, D0O);
+    net->dec0->up->W_ = load_bf16_tensor(st, "unet.dec_blocks.0.upsample.weight", std::vector<size_t>{D0O, D0O, 2, 2});
+    net->dec0->up->b_ = load_bf16_tensor(st, "unet.dec_blocks.0.upsample.bias",   std::vector<size_t>{D0O});
 
-        // ---------- final output conv ---------------------------------
-        { &W.out_w, "unet.out_conv.weight", DiffusionConfig::out_channels, DEC1_OUT, 1,1 },
-        { &W.out_b, "unet.out_conv.bias",   DiffusionConfig::out_channels, 0             },
-    };
+    net->dec0->t_proj = std::make_shared<LinearBF16>(T, D0O);
+    net->dec0->t_proj->W_ = load_bf16_tensor(st, "unet.dec_blocks.0.time_proj.weight", std::vector<size_t>{D0O, T});
+    net->dec0->t_proj->b_ = load_bf16_tensor(st, "unet.dec_blocks.0.time_proj.bias",   std::vector<size_t>{D0O});
 
-    for (const auto& e : tbl)
-        *e.field = load_bf16_tensor(st, e.key, e.d0, e.d1, e.d2, e.d3);
+    // ---- Decoder‑1 -----------------------------
+    net->dec1 = std::make_shared<DecoderBlockBF16>(D1O);
+    net->dec1->conv1 = std::make_shared<Conv2dBF16>(D0O + C0, D1O);
+    net->dec1->conv1->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.conv1.weight", std::vector<size_t>{D1O, D0O+C0, 3, 3});
+    net->dec1->conv1->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.conv1.bias",   std::vector<size_t>{D1O});
+    net->dec1->conv2 = std::make_shared<Conv2dBF16>(D1O, D1O);
+    net->dec1->conv2->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.conv2.weight", std::vector<size_t>{D1O, D1O, 3, 3});
+    net->dec1->conv2->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.conv2.bias",   std::vector<size_t>{D1O});
+    net->dec1->up = std::make_shared<ConvTrans2dBF16>(D1O, D1O);
+    net->dec1->up->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.upsample.weight", std::vector<size_t>{D1O, D1O, 2, 2});
+    net->dec1->up->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.upsample.bias",   std::vector<size_t>{D1O});
+    
+    net->dec1->t_proj = std::make_shared<LinearBF16>(T, D1O);
+    net->dec1->t_proj->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.time_proj.weight", std::vector<size_t>{D1O, T});
+    net->dec1->t_proj->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.time_proj.bias",   std::vector<size_t>{D1O});
 
-    return W;
+    // ---- head conv -----------------------------
+    net->out_conv1 = std::make_shared<Conv2dBF16>(D1O, DiffusionConfig::out_channels);
+    net->out_conv1->W_ = load_bf16_tensor(st, "unet.out_conv.weight", std::vector<size_t>{DiffusionConfig::out_channels, D1O, 1, 1});
+    net->out_conv1->b_ = load_bf16_tensor(st, "unet.out_conv.bias",   std::vector<size_t>{DiffusionConfig::out_channels});
+
+    return net;
 }

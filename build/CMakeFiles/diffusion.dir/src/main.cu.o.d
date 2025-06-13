@@ -185,6 +185,7 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/cs179-diffusion/src/main.c
     /usr/include/c++/11/utility \
     /usr/include/c++/11/bits/stl_relops.h \
     /usr/include/c++/11/initializer_list \
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.cu \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLoader.h \
     /usr/include/c++/11/memory \
     /usr/include/c++/11/bits/allocator.h \
@@ -336,14 +337,6 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/cs179-diffusion/src/main.c
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.hpp \
     /home/bkwang/cs179-diffusion/src/diffusion/../CudaBuffer.cuh \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionConfig.h \
-    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionWeights.h \
-    /home/bkwang/cs179-diffusion/src/diffusion/../vendor/safetensors.hh \
-    /usr/include/c++/11/map \
-    /usr/include/c++/11/bits/stl_tree.h \
-    /usr/include/c++/11/bits/node_handle.h \
-    /usr/include/c++/11/bits/stl_map.h \
-    /usr/include/c++/11/bits/stl_multimap.h \
-    /usr/include/c++/11/bits/erase_if.h \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionUNet.cuh \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionLayers.cuh \
     /home/bkwang/cs179-diffusion/src/diffusion/DiffusionHelper.cuh \
@@ -367,4 +360,13 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/cs179-diffusion/src/main.c
     /usr/include/c++/11/iostream \
     /usr/include/c++/11/istream \
     /usr/include/c++/11/bits/istream.tcc \
-    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh
+    /home/bkwang/cs179-diffusion/src/diffusion/DiffusionKernels.cuh \
+    /home/bkwang/cs179-diffusion/src/diffusion/../vendor/safetensors.hh \
+    /usr/include/c++/11/map \
+    /usr/include/c++/11/bits/stl_tree.h \
+    /usr/include/c++/11/bits/node_handle.h \
+    /usr/include/c++/11/bits/stl_map.h \
+    /usr/include/c++/11/bits/stl_multimap.h \
+    /usr/include/c++/11/bits/erase_if.h \
+    /home/bkwang/cs179-diffusion/src/diffusion/../HostBuffer.h \
+    /usr/include/c++/11/cstddef

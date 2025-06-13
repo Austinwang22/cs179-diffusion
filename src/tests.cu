@@ -8,7 +8,6 @@
 #include <random>
 #include <cmath>
 
-#include "diffusion/DiffusionHelper.cuh"        // ensure_size, checkCuda, etc.
 #include "diffusion/DiffusionLayers.cuh"      // LinearBF16, Conv2dBF16, ConvTrans2dBF16, MaxPool2dBF16
 
 // ----------------------------------------------------------------------------

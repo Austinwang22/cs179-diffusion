@@ -40,26 +40,26 @@ struct Handles {
     static Handles &get() { static Handles h; return h; }
 };
 
-// -----------------------------------------------------------------------------
-// ensure_size: grow-or-keep for std::shared_ptr<CudaBuffer>
-// -----------------------------------------------------------------------------
-inline void ensure_size(std::shared_ptr<CudaBuffer>& buf, size_t bytes) {
-    if (bytes == 0) return;
-    if (!buf || buf->size < bytes)
-        buf = std::make_shared<CudaBuffer>(bytes);
-}
+// // -----------------------------------------------------------------------------
+// // ensure_size: grow-or-keep for std::shared_ptr<CudaBuffer>
+// // -----------------------------------------------------------------------------
+// inline void ensure_size(std::shared_ptr<CudaBuffer>& buf, size_t bytes) {
+//     if (bytes == 0) return;
+//     if (!buf || buf->size < bytes)
+//         buf = std::make_shared<CudaBuffer>(bytes);
+// }
 
-// -----------------------------------------------------------------------------
-// ensure_size: grow-in-place for a value CudaBuffer
-// -----------------------------------------------------------------------------
-inline void ensure_size(CudaBuffer& buf, size_t bytes) {
-    if (bytes == 0 || buf.size >= bytes && buf.data) return;
-    void* new_ptr = nullptr;
-    checkCuda(cudaMallocManaged(&new_ptr, bytes));
-    if (buf.data) checkCuda(cudaFree(buf.data));
-    buf.data = new_ptr;
-    buf.size = bytes;
-}
+// // -----------------------------------------------------------------------------
+// // ensure_size: grow-in-place for a value CudaBuffer
+// // -----------------------------------------------------------------------------
+// inline void ensure_size(CudaBuffer& buf, size_t bytes) {
+//     if (bytes == 0 || buf.size >= bytes && buf.data) return;
+//     void* new_ptr = nullptr;
+//     checkCuda(cudaMallocManaged(&new_ptr, bytes));
+//     if (buf.data) checkCuda(cudaFree(buf.data));
+//     buf.data = new_ptr;
+//     buf.size = bytes;
+// }
 
 // -----------------------------------------------------------------------------
 // bytes: shorthand for buf.size
@@ -72,8 +72,7 @@ static void dump(const char* tag,
                  const __nv_bfloat16* d, size_t n, cudaStream_t s = 0)
 {
     std::vector<__nv_bfloat16> h(n);
-    cudaMemcpyAsync(h.data(), d, n*sizeof(__nv_bfloat16),
-                    cudaMemcpyDeviceToHost, s);
+    cudaMemcpyAsync(h.data(), d, n*sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost, s);
     cudaStreamSynchronize(s);
     std::cerr << tag << " : ";
     for (size_t i=0;i<n;++i) std::cerr << __bfloat162float(h[i]) << ' ';
@@ -125,11 +124,25 @@ inline void silu_inplace32(float *x, size_t n, cudaStream_t s)
 //     kernels::add_time_bias_kernel<<<(size_t(B) * C * H * W + 255) / 256, 256, 0, s>>>(y, t, B, C, H * W);
 // }
 
-inline void add_time_bias(__nv_bfloat16 *y, const float *bias32, int B, int C, int H, int W, cudaStream_t s)
+// inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
+// {
+//     constexpr int TPB = 256;
+//     size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
+//     kernels::add_time_bias_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
+// }
+
+inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
 {
     constexpr int TPB = 256;
     size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
     kernels::add_time_bias_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
+}
+
+inline void add_time_bias32(__nv_bfloat16 *y, const float *bias32, int B, int C, int H, int W, cudaStream_t s)
+{
+    constexpr int TPB = 256;
+    size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
+    kernels::add_time_bias32_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
 }
 
 // inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
