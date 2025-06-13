@@ -29,7 +29,7 @@ public:
         auto &blas = Handles::get().blas;  cublasSetStream(blas, s);
         const float alpha = 1.f, beta = 0.f;
         // y = W * x  ;  W column‑major (out_f×in_f)
-        // GEMM: (out_f×1) = (out_f×in_f) * (in_f×1)
+        // // GEMM: (out_f×1) = (out_f×in_f) * (in_f×1)
         // cublasGemmEx(blas,
         //              CUBLAS_OP_N, CUBLAS_OP_N,
         //              out_f, 1, in_f,
@@ -74,11 +74,36 @@ public:
                     y_fp32,                 CUDA_R_32F,   out_f,  // FP32 output
                     CUDA_R_32F,  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
 
-        /* add BF16 bias in FP32 */
-        int tpb = 256, blk = (out_f + tpb - 1) / tpb;
-        kernels::add_bias_fp32_kernel<<<blk, tpb, 0, s>>>(y_fp32,
-                                                static_cast<const __nv_bfloat16*>(b->data),
-                                                out_f);
+        /* add bias in FP32 */
+        const __nv_bfloat16* b_bf16 = static_cast<const __nv_bfloat16*>(b->data);
+        for (int i = 0; i < out_f; ++i) {
+            y_fp32[i] += __bfloat162float(b_bf16[i]);
+        }
+    }
+
+    void forward32_fp32(const float *x_fp32,   // [in_f]  (FP32)
+                       float *y_fp32,          // [out_f] (FP32)
+                       cudaStream_t s) const {
+        auto &blas = Handles::get().blas;  cublasSetStream(blas, s);
+
+        const float alpha = 1.f, beta = 0.f;
+
+        /*  GEMM:  y_fp32 = W_bf16^T  *  x_fp32   (accumulate in FP32) */
+        cublasGemmEx(blas,
+                    CUBLAS_OP_T,  CUBLAS_OP_N,
+                    out_f, 1, in_f,
+                    &alpha,
+                    W->data,                CUDA_R_16BF,  in_f,   // **BF16 weights**
+                    x_fp32,                 CUDA_R_32F,   in_f,   // FP32 input
+                    &beta,
+                    y_fp32,                 CUDA_R_32F,   out_f,  // FP32 output
+                    CUDA_R_32F,  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+
+        /* add bias in FP32 */
+        const __nv_bfloat16* b_bf16 = static_cast<const __nv_bfloat16*>(b->data);
+        for (int i = 0; i < out_f; ++i) {
+            y_fp32[i] += __bfloat162float(b_bf16[i]);
+        }
     }
 
     void set_weights(std::shared_ptr<CudaBuffer> w, std::shared_ptr<CudaBuffer> b_) {
@@ -340,9 +365,14 @@ public:
                 size_t(B) * proj1.out_f, s);
 
         /* ---------- proj-2 ---------- */
+        ensure_size(tmp_bf16, size_t(B) * proj1.out_f * sizeof(__nv_bfloat16));
+        dm::fp32_to_bf16(reinterpret_cast<float*>(tmp_fp32.data),
+                         reinterpret_cast<__nv_bfloat16*>(tmp_bf16.data),
+                         size_t(B) * proj1.out_f, s);
+
         for (int b = 0; b < B; ++b)
             proj2.forward32(
-                reinterpret_cast<__nv_bfloat16*>(tmp_fp32.data) + b * proj1.out_f,
+                reinterpret_cast<__nv_bfloat16*>(tmp_bf16.data) + b * proj1.out_f,
                 reinterpret_cast<float*>(out_fp32.data) + b * dim, s);
 
         /* ---------- one cast to BF16 ---------- */

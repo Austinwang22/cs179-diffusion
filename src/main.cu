@@ -50,6 +50,7 @@ void test_forward_with_weights() {
     // ------------------------------
     // Perform forward pass
     // ------------------------------
+
     cudaStream_t stream;
     checkCuda(cudaStreamCreate(&stream));
     model.forward(static_cast<__nv_bfloat16 *>(input.data), h_tstamp, B, stream);

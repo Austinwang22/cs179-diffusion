@@ -95,10 +95,26 @@ class EncoderBlock(torch.nn.Module):
         
     
     def forward(self, x, t_emb):
+        print('\nForward Pass\n')
+        print(f't_emb: ', t_emb.flatten()[0:7], t_emb.shape)
         t_proj = self.time_proj(t_emb).unsqueeze(-1).unsqueeze(-1)
-        h = self.act(self.conv1(x) + t_proj)
-        h = self.act(self.conv2(h) + t_proj)
+        print(f'tbias: ', t_proj.flatten()[0:7], t_proj.shape)
+        print(x.flatten()[0:16], x.shape)
+        h = (self.conv1(x))
+        print(h.flatten()[0:16], h.shape)
+        h += t_proj
+        print(h.flatten()[0:16], h.shape)
+        h = self.act(h)
+        print(h.flatten()[0:16], h.shape, '\n')
+        h = (self.conv2(h))
+        print(h.flatten()[0:16], h.shape)
+        print(f'tbias: ', t_proj.flatten()[0:7], t_proj.shape)
+        h += t_proj
+        print(h.flatten()[0:16], h.shape)
+        h = self.act(h)
+        print(h.flatten()[0:16], h.shape)
         h = self.downsample(h)
+        print(h.flatten()[0:16], h.shape)
         return h
          
     

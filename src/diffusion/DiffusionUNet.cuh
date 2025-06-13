@@ -47,36 +47,76 @@ public:
                  std::vector<std::shared_ptr<CudaBuffer>> &skips,
                  cudaStream_t st)
     {
-        ensure_size(tbuf, size_t(s.B) * conv1.out_channels() * sizeof(float));
-        for (int b = 0; b < s.B; ++b)
-            t_proj.forward32(                              // <- FP32-output version
-                temb + b * t_proj.in_f,
-                reinterpret_cast<float*>(tbuf.data) + b * conv1.out_channels(),
-                st);
-        const float* tbias = reinterpret_cast<const float*>(tbuf.data); // FP32
-
         // tmp for conv1 output
         ensure_size(tmp, size_t(s.B) * conv1.out_channels() * s.H * s.W * sizeof(__nv_bfloat16));
+        // tmp2 for time bias addition
+        ensure_size(tmp2, size_t(s.B) * conv1.out_channels() * s.H * s.W * sizeof(__nv_bfloat16));
 
-        // conv1 + bias + ReLU
-        dump_chw("1 enc0-conv1 CUDA", x, conv2.out_channels(), s.H, s.W, st);
+        // First convolution block
+        dump_chw("1 enc0-conv1 CUDA", x, conv1.out_channels(), s.H, s.W, st);
         conv1.forward(x, s.B, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp.data), st);
-        dump_chw("2 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp.data), conv2.out_channels(), s.H, s.W, st);
-        add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp.data), reinterpret_cast<const float*>(tbuf.data), s.B, conv1.out_channels(), s.H, s.W, st);
-        dump_chw("3 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp.data), conv2.out_channels(), s.H, s.W, st);
-        relu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp.data), size_t(s.B) * conv1.out_channels() * s.H * s.W, st);
-        dump_chw("4 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp.data), conv2.out_channels(), s.H, s.W, st);
+        dump_chw("2 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp.data), conv1.out_channels(), s.H, s.W, st);
+        
+        // Debug print temb before time projection
+        {
+            size_t n_dbg = std::min<size_t>(8, size_t(s.B) * t_proj.in_f);
+            std::vector<__nv_bfloat16> h_dbg(n_dbg);
+            
+            cudaMemcpyAsync(h_dbg.data(), temb, n_dbg * sizeof(__nv_bfloat16),
+                            cudaMemcpyDeviceToHost, st);
+            cudaStreamSynchronize(st);
+            
+            std::cerr << "temb[0:" << n_dbg - 1 << "] = ";
+            for (__nv_bfloat16 v : h_dbg) std::cerr << __bfloat162float(v) << ' ';
+            std::cerr << '\n';
+        }
+        
+        // Compute time projection once
+        ensure_size(tbuf1, size_t(s.B) * conv1.out_channels() * sizeof(float));
+        for (int b = 0; b < s.B; ++b) {
+            t_proj.forward32(                              // <- FP32-output version
+                temb + b * t_proj.in_f,
+                reinterpret_cast<float*>(tbuf1.data) + b * conv1.out_channels(),
+                st);
+        }
+        const float* tbias = reinterpret_cast<const float*>(tbuf1.data); // FP32
+        
+        // Debug print the tbias values
+        {
+            size_t n_dbg = std::min<size_t>(8, size_t(s.B) * conv1.out_channels());
+            std::vector<float> h_dbg(n_dbg);
+            
+            cudaMemcpyAsync(h_dbg.data(), tbias, n_dbg * sizeof(float),
+                            cudaMemcpyDeviceToHost, st);
+            cudaStreamSynchronize(st);
+            
+            std::cerr << "tbias[0:" << n_dbg - 1 << "] = ";
+            for (float v : h_dbg) std::cerr << v << ' ';
+            std::cerr << '\n';
+        }
+        
+        // Copy to tmp2 before adding time bias
+        cudaMemcpyAsync(tmp2.data, tmp.data, tmp.size, cudaMemcpyDeviceToDevice, st);
+        add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp2.data), tbias, s.B, conv1.out_channels(), s.H, s.W, st);
+        dump_chw("3 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp2.data), conv1.out_channels(), s.H, s.W, st);
+        relu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp2.data), size_t(s.B) * conv1.out_channels() * s.H * s.W, st);
+        dump_chw("4 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp2.data), conv1.out_channels(), s.H, s.W, st);
 
         std::cerr << "=======\n";
 
-        // conv2 + bias + ReLU (in‑place to x)
-        dump_chw("1 enc0-conv2 CUDA",  reinterpret_cast<__nv_bfloat16*>(tmp.data), conv2.out_channels(), s.H, s.W, st);
-        conv2.forward(reinterpret_cast<__nv_bfloat16*>(tmp.data), s.B, s.H, s.W, x, st);
+        // Second convolution block
+        conv2.forward(reinterpret_cast<__nv_bfloat16*>(tmp2.data), s.B, s.H, s.W, x, st);
         dump_chw("2 enc0-conv2 CUDA", x, conv2.out_channels(), s.H, s.W, st);
-        add_time_bias(x, tbias, s.B, conv2.out_channels(), s.H, s.W, st);
-        dump_chw("3 enc0-conv2 CUDA", x, conv2.out_channels(), s.H, s.W, st);
-        relu_inplace(x, size_t(s.B) * conv2.out_channels() * s.H * s.W, st);
-        dump_chw("4 enc0-conv2 CUDA", x, conv2.out_channels(), s.H, s.W, st);
+
+        // Copy to tmp2 before adding time bias
+        cudaMemcpyAsync(tmp2.data, x, size_t(s.B) * conv2.out_channels() * s.H * s.W * sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, st);
+        add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp2.data), tbias, s.B, conv2.out_channels(), s.H, s.W, st);
+        dump_chw("3 enc0-conv2 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp2.data), conv2.out_channels(), s.H, s.W, st);
+        relu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp2.data), size_t(s.B) * conv2.out_channels() * s.H * s.W, st);
+        dump_chw("4 enc0-conv2 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp2.data), conv2.out_channels(), s.H, s.W, st);
+
+        // Copy back to x
+        cudaMemcpyAsync(x, tmp2.data, size_t(s.B) * conv2.out_channels() * s.H * s.W * sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, st);
 
         std::cerr << "========================\n";
 
@@ -98,7 +138,7 @@ private:
     Conv2dBF16   conv1, conv2;
     MaxPool2dBF16 pool;
     LinearBF16    t_proj;
-    CudaBuffer    tmp{0}, tbuf{0};
+    CudaBuffer    tmp{0}, tmp2{0}, tbuf1{0};
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -328,211 +368,211 @@ private:
 
 
 
-// // DiffusionUNet.cuh – 2‑level encoder‑decoder U‑Net (bf16), buffer‑safe
-// #pragma once
+// // // DiffusionUNet.cuh – 2‑level encoder‑decoder U‑Net (bf16), buffer‑safe
+// // #pragma once
 
-// #include "DiffusionLayers.cuh"
-// #include "DiffusionHelper.cuh"
+// // #include "DiffusionLayers.cuh"
+// // #include "DiffusionHelper.cuh"
 
-// #include "DiffusionConfig.h"
-// #include "DiffusionWeights.h"
+// // #include "DiffusionConfig.h"
+// // #include "DiffusionWeights.h"
 
-// using namespace dm;
+// // using namespace dm;
 
-// struct Shape { int B,C,H,W; };
+// // struct Shape { int B,C,H,W; };
 
-// class EncoderBlock {
-// public:
-//     EncoderBlock(int in_c, int out_c, int t_dim)
-//         : in_ch(in_c), out_ch(out_c),
-//           conv1(in_c, out_c), conv2(out_c, out_c),
-//           ln(out_c), t_proj(t_dim, out_c, /*withBias=*/false), pool() {}
+// // class EncoderBlock {
+// // public:
+// //     EncoderBlock(int in_c, int out_c, int t_dim)
+// //         : in_ch(in_c), out_ch(out_c),
+// //           conv1(in_c, out_c), conv2(out_c, out_c),
+// //           ln(out_c), t_proj(t_dim, out_c, /*withBias=*/false), pool() {}
 
-//     void forward(__nv_bfloat16 *x, Shape &s,
-//                  const __nv_bfloat16 *temb,   // [B, t_dim]
-//                  std::vector<std::shared_ptr<CudaBuffer>> &skips,
-//                  cudaStream_t st)
-//     {
-//         // -------- project time embedding once per batch ------
-//         ensure_size(tbuf, size_t(s.B) * out_ch * sizeof(__nv_bfloat16));
-//         for (int b=0; b<s.B; ++b)
-//             t_proj.forward(temb + b*t_proj.in_f,
-//                            reinterpret_cast<__nv_bfloat16*>(tbuf.data) + b*out_ch,
-//                            st);
-//         const __nv_bfloat16 *tbias = reinterpret_cast<const __nv_bfloat16*>(tbuf.data);
+// //     void forward(__nv_bfloat16 *x, Shape &s,
+// //                  const __nv_bfloat16 *temb,   // [B, t_dim]
+// //                  std::vector<std::shared_ptr<CudaBuffer>> &skips,
+// //                  cudaStream_t st)
+// //     {
+// //         // -------- project time embedding once per batch ------
+// //         ensure_size(tbuf, size_t(s.B) * out_ch * sizeof(__nv_bfloat16));
+// //         for (int b=0; b<s.B; ++b)
+// //             t_proj.forward(temb + b*t_proj.in_f,
+// //                            reinterpret_cast<__nv_bfloat16*>(tbuf.data) + b*out_ch,
+// //                            st);
+// //         const __nv_bfloat16 *tbias = reinterpret_cast<const __nv_bfloat16*>(tbuf.data);
 
-//         // workspace for conv1 output
-//         ensure_size(tmp, size_t(s.B) * out_ch * s.H * s.W * sizeof(__nv_bfloat16));
+// //         // workspace for conv1 output
+// //         ensure_size(tmp, size_t(s.B) * out_ch * s.H * s.W * sizeof(__nv_bfloat16));
 
-//         // conv1 + bias + SiLU --------------------------------
-//         conv1.forward(x, s.B, s.H, s.W, nullptr,
-//                       reinterpret_cast<__nv_bfloat16*>(tmp.data), st);
-//         add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp.data), tbias,
-//                       s.B, out_ch, s.H, s.W, st);
-//         silu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp.data),
-//                      size_t(s.B) * out_ch * s.H * s.W, st);
+// //         // conv1 + bias + SiLU --------------------------------
+// //         conv1.forward(x, s.B, s.H, s.W, nullptr,
+// //                       reinterpret_cast<__nv_bfloat16*>(tmp.data), st);
+// //         add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp.data), tbias,
+// //                       s.B, out_ch, s.H, s.W, st);
+// //         silu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp.data),
+// //                      size_t(s.B) * out_ch * s.H * s.W, st);
 
-//         // conv2 + bias + SiLU --------------------------------
-//         conv2.forward(reinterpret_cast<__nv_bfloat16*>(tmp.data), s.B, s.H, s.W,
-//                       nullptr, x, st);
-//         add_time_bias(x, tbias, s.B, out_ch, s.H, s.W, st);
-//         silu_inplace(x, size_t(s.B) * out_ch * s.H * s.W, st);
+// //         // conv2 + bias + SiLU --------------------------------
+// //         conv2.forward(reinterpret_cast<__nv_bfloat16*>(tmp.data), s.B, s.H, s.W,
+// //                       nullptr, x, st);
+// //         add_time_bias(x, tbias, s.B, out_ch, s.H, s.W, st);
+// //         silu_inplace(x, size_t(s.B) * out_ch * s.H * s.W, st);
 
-//         // LN --------------------------------------------------
-//         ln.forward(x, s.B, s.H, s.W, x, st);
+// //         // LN --------------------------------------------------
+// //         ln.forward(x, s.B, s.H, s.W, x, st);
 
-//         // save skip ------------------------------------------
-//         auto saved = std::make_shared<CudaBuffer>(size_t(s.B)*out_ch*s.H*s.W*sizeof(__nv_bfloat16));
-//         cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
-//         skips.push_back(saved);
+// //         // save skip ------------------------------------------
+// //         auto saved = std::make_shared<CudaBuffer>(size_t(s.B)*out_ch*s.H*s.W*sizeof(__nv_bfloat16));
+// //         cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
+// //         skips.push_back(saved);
 
-//         // Max‑pool -------------------------------------------
-//         pool.forward(x, s.B, out_ch, s.H, s.W,
-//                      reinterpret_cast<__nv_bfloat16*>(tmp.data), st);
-//         cudaMemcpyAsync(x, tmp.data, tmp.size, cudaMemcpyDeviceToDevice, st);
-//         s.H /= 2; s.W /= 2; s.C = out_ch;   // <- update channel count
-//     }
+// //         // Max‑pool -------------------------------------------
+// //         pool.forward(x, s.B, out_ch, s.H, s.W,
+// //                      reinterpret_cast<__nv_bfloat16*>(tmp.data), st);
+// //         cudaMemcpyAsync(x, tmp.data, tmp.size, cudaMemcpyDeviceToDevice, st);
+// //         s.H /= 2; s.W /= 2; s.C = out_ch;   // <- update channel count
+// //     }
 
-//     void set_weights(std::shared_ptr<CudaBuffer> c1w, std::shared_ptr<CudaBuffer> c1b,
-//                     std::shared_ptr<CudaBuffer> c2w, std::shared_ptr<CudaBuffer> c2b,
-//                     std::shared_ptr<CudaBuffer> lng, std::shared_ptr<CudaBuffer> lnb,
-//                     std::shared_ptr<CudaBuffer> tpw) {
-//         conv1.set_weights(std::move(c1w));
-//         conv1.set_bias(std::move(c1b));
-//         conv2.set_weights(std::move(c2w));
-//         conv2.set_bias(std::move(c2b));
-//         ln.set_weights(std::move(lng), std::move(lnb));
-//         t_proj.set_weights(std::move(tpw), nullptr);
-//     }
+// //     void set_weights(std::shared_ptr<CudaBuffer> c1w, std::shared_ptr<CudaBuffer> c1b,
+// //                     std::shared_ptr<CudaBuffer> c2w, std::shared_ptr<CudaBuffer> c2b,
+// //                     std::shared_ptr<CudaBuffer> lng, std::shared_ptr<CudaBuffer> lnb,
+// //                     std::shared_ptr<CudaBuffer> tpw) {
+// //         conv1.set_weights(std::move(c1w));
+// //         conv1.set_bias(std::move(c1b));
+// //         conv2.set_weights(std::move(c2w));
+// //         conv2.set_bias(std::move(c2b));
+// //         ln.set_weights(std::move(lng), std::move(lnb));
+// //         t_proj.set_weights(std::move(tpw), nullptr);
+// //     }
 
-// private:
-//     int in_ch, out_ch;
-//     Conv2dBF16 conv1, conv2;  LayerNormBF16 ln;  LinearBF16 t_proj;  MaxPool2dBF16 pool;
-//     CudaBuffer tmp{0}, tbuf{0};
-// };
+// // private:
+// //     int in_ch, out_ch;
+// //     Conv2dBF16 conv1, conv2;  LayerNormBF16 ln;  LinearBF16 t_proj;  MaxPool2dBF16 pool;
+// //     CudaBuffer tmp{0}, tbuf{0};
+// // };
 
-// // helper to NN‑upsample in‑place (allocate scratch)
-// static inline void upsample_nn(__nv_bfloat16 **x_ptr, Shape &s, CudaBuffer &scratch, cudaStream_t st) {
-//     ensure_size(scratch, size_t(s.B) * s.C * s.H * s.W * 4 * sizeof(__nv_bfloat16));
-//     upsample2x(*x_ptr, s.B, s.C, s.H, s.W, (__nv_bfloat16 *)scratch.data, st);
-//     *x_ptr = (__nv_bfloat16 *)scratch.data;
-//     s.H *= 2; s.W *= 2;
-// }
+// // // helper to NN‑upsample in‑place (allocate scratch)
+// // static inline void upsample_nn(__nv_bfloat16 **x_ptr, Shape &s, CudaBuffer &scratch, cudaStream_t st) {
+// //     ensure_size(scratch, size_t(s.B) * s.C * s.H * s.W * 4 * sizeof(__nv_bfloat16));
+// //     upsample2x(*x_ptr, s.B, s.C, s.H, s.W, (__nv_bfloat16 *)scratch.data, st);
+// //     *x_ptr = (__nv_bfloat16 *)scratch.data;
+// //     s.H *= 2; s.W *= 2;
+// // }
 
-// class UNetBF16 {
-// public:
-//     explicit UNetBF16(int res, int t_dim = 128)
-//         : img_res(res), timeEmb(t_dim),
-//           enc0(1, 64, t_dim), enc1(64, 128, t_dim),
-//           bott1(128, 128), bott2(128, 128), bott_ln(128),
-//           dec1a(256, 128), dec1b(128, 128),
-//           dec2a(192, 64),  dec2b(64,  64),
-//           out_conv(64, 1) {}
+// // class UNetBF16 {
+// // public:
+// //     explicit UNetBF16(int res, int t_dim = 128)
+// //         : img_res(res), timeEmb(t_dim),
+// //           enc0(1, 64, t_dim), enc1(64, 128, t_dim),
+// //           bott1(128, 128), bott2(128, 128), bott_ln(128),
+// //           dec1a(256, 128), dec1b(128, 128),
+// //           dec2a(192, 64),  dec2b(64,  64),
+// //           out_conv(64, 1) {}
 
-//     void forward(__nv_bfloat16 *x, const int32_t *t_host, int B, cudaStream_t st) {
-//         // time embedding
-//         ensure_size(temb_buf, size_t(B) * timeEmb.dim * sizeof(__nv_bfloat16));
-//         timeEmb.forward(t_host, B, (__nv_bfloat16 *)temb_buf.data, st);
-//         const __nv_bfloat16 *temb = (__nv_bfloat16 *)temb_buf.data;
+// //     void forward(__nv_bfloat16 *x, const int32_t *t_host, int B, cudaStream_t st) {
+// //         // time embedding
+// //         ensure_size(temb_buf, size_t(B) * timeEmb.dim * sizeof(__nv_bfloat16));
+// //         timeEmb.forward(t_host, B, (__nv_bfloat16 *)temb_buf.data, st);
+// //         const __nv_bfloat16 *temb = (__nv_bfloat16 *)temb_buf.data;
 
-//         Shape s{B, 1, img_res, img_res};
-//         skips.clear(); skips.reserve(2);
-//         // encoder 0,1
-//         enc0.forward(x, s, temb, skips, st);
-//         enc1.forward(x, s, temb, skips, st);
-//         // bottleneck
-//         ensure_size(bot_tmp, size_t(B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
-//         bott1.forward(x, s.B, s.H, s.W, nullptr, (__nv_bfloat16 *)bot_tmp.data, st);
-//         bott2.forward((__nv_bfloat16 *)bot_tmp.data, s.B, s.H, s.W, nullptr, x, st);
-//         bott_ln.forward(x, s.B, s.H, s.W, x, st);
-//         // decoder stage‑1
-//         upsample_nn(&x, s, up_tmp, st);
-//         cat_and_conv(x, skips.back(), s, dec1a, cat_buf, st);   // <- new call
-//         dec1b.forward(x, s.B, s.H, s.W, nullptr, x, st);
-//         skips.pop_back();
-//         // decoder stage‑2
-//         upsample_nn(&x, s, up_tmp, st);
-//         cat_and_conv(x, skips.back(), s, dec2a, cat_buf, st);   // <- new call
-//         dec2b.forward(x, s.B, s.H, s.W, nullptr, x, st);
-//         skips.pop_back();
-//         // out conv
-//         out_conv.forward(x, s.B, s.H, s.W, nullptr, x, st);
-//     }
+// //         Shape s{B, 1, img_res, img_res};
+// //         skips.clear(); skips.reserve(2);
+// //         // encoder 0,1
+// //         enc0.forward(x, s, temb, skips, st);
+// //         enc1.forward(x, s, temb, skips, st);
+// //         // bottleneck
+// //         ensure_size(bot_tmp, size_t(B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
+// //         bott1.forward(x, s.B, s.H, s.W, nullptr, (__nv_bfloat16 *)bot_tmp.data, st);
+// //         bott2.forward((__nv_bfloat16 *)bot_tmp.data, s.B, s.H, s.W, nullptr, x, st);
+// //         bott_ln.forward(x, s.B, s.H, s.W, x, st);
+// //         // decoder stage‑1
+// //         upsample_nn(&x, s, up_tmp, st);
+// //         cat_and_conv(x, skips.back(), s, dec1a, cat_buf, st);   // <- new call
+// //         dec1b.forward(x, s.B, s.H, s.W, nullptr, x, st);
+// //         skips.pop_back();
+// //         // decoder stage‑2
+// //         upsample_nn(&x, s, up_tmp, st);
+// //         cat_and_conv(x, skips.back(), s, dec2a, cat_buf, st);   // <- new call
+// //         dec2b.forward(x, s.B, s.H, s.W, nullptr, x, st);
+// //         skips.pop_back();
+// //         // out conv
+// //         out_conv.forward(x, s.B, s.H, s.W, nullptr, x, st);
+// //     }
 
-//     void load_weights(const DiffusionWeights &W) {
-//         // --- time embedding
-//         timeEmb.set_weights(W.t_proj1_w, W.t_proj1_b,
-//                             W.t_proj2_w, W.t_proj2_b);
+// //     void load_weights(const DiffusionWeights &W) {
+// //         // --- time embedding
+// //         timeEmb.set_weights(W.t_proj1_w, W.t_proj1_b,
+// //                             W.t_proj2_w, W.t_proj2_b);
 
-//         // --- encoder blocks
-//         enc0.set_weights(W.enc[0].conv1_w, W.enc[0].conv1_b,
-//                         W.enc[0].conv2_w, W.enc[0].conv2_b,
-//                         W.enc[0].ln_gamma, W.enc[0].ln_beta,
-//                         W.enc[0].t_proj_w);
-//         enc1.set_weights(W.enc[1].conv1_w, W.enc[1].conv1_b,
-//                         W.enc[1].conv2_w, W.enc[1].conv2_b,
-//                         W.enc[1].ln_gamma, W.enc[1].ln_beta,
-//                         W.enc[1].t_proj_w);
+// //         // --- encoder blocks
+// //         enc0.set_weights(W.enc[0].conv1_w, W.enc[0].conv1_b,
+// //                         W.enc[0].conv2_w, W.enc[0].conv2_b,
+// //                         W.enc[0].ln_gamma, W.enc[0].ln_beta,
+// //                         W.enc[0].t_proj_w);
+// //         enc1.set_weights(W.enc[1].conv1_w, W.enc[1].conv1_b,
+// //                         W.enc[1].conv2_w, W.enc[1].conv2_b,
+// //                         W.enc[1].ln_gamma, W.enc[1].ln_beta,
+// //                         W.enc[1].t_proj_w);
 
-//         // --- bottleneck
-//         bott1.set_weights(W.bott1_w);
-//         bott1.set_bias(W.bott1_b);
-//         bott2.set_weights(W.bott2_w);
-//         bott2.set_bias(W.bott2_b);
-//         bott_ln.set_weights(W.bott_ln_gamma, W.bott_ln_beta);
+// //         // --- bottleneck
+// //         bott1.set_weights(W.bott1_w);
+// //         bott1.set_bias(W.bott1_b);
+// //         bott2.set_weights(W.bott2_w);
+// //         bott2.set_bias(W.bott2_b);
+// //         bott_ln.set_weights(W.bott_ln_gamma, W.bott_ln_beta);
 
-//         // --- decoder-1
-//         dec1a.set_weights(W.dec1.conv1_w);
-//         dec1a.set_bias(W.dec1.conv1_b);
-//         dec1b.set_weights(W.dec1.conv2_w);
-//         dec1b.set_bias(W.dec1.conv2_b);
+// //         // --- decoder-1
+// //         dec1a.set_weights(W.dec1.conv1_w);
+// //         dec1a.set_bias(W.dec1.conv1_b);
+// //         dec1b.set_weights(W.dec1.conv2_w);
+// //         dec1b.set_bias(W.dec1.conv2_b);
 
-//         // --- decoder-2
-//         dec2a.set_weights(W.dec2.conv1_w);
-//         dec2a.set_bias(W.dec2.conv1_b);
-//         dec2b.set_weights(W.dec2.conv2_w);
-//         dec2b.set_bias(W.dec2.conv2_b);
+// //         // --- decoder-2
+// //         dec2a.set_weights(W.dec2.conv1_w);
+// //         dec2a.set_bias(W.dec2.conv1_b);
+// //         dec2b.set_weights(W.dec2.conv2_w);
+// //         dec2b.set_bias(W.dec2.conv2_b);
 
-//         // --- output conv
-//         out_conv.set_weights(W.out_w);
-//         out_conv.set_bias(W.out_b);
-//     }
+// //         // --- output conv
+// //         out_conv.set_weights(W.out_w);
+// //         out_conv.set_bias(W.out_b);
+// //     }
 
-// private:
-//     int img_res; TimeEmbeddingBF16 timeEmb;
-//     // blocks
-//     EncoderBlock enc0, enc1;
-//     Conv2dBF16 bott1, bott2; LayerNormBF16 bott_ln;
-//     Conv2dBF16 dec1a, dec1b, dec2a, dec2b, out_conv;
-//     // buffers
-//     CudaBuffer temb_buf{0}, bot_tmp{0}, up_tmp{0};
-//     std::vector<std::shared_ptr<CudaBuffer>> skips;
+// // private:
+// //     int img_res; TimeEmbeddingBF16 timeEmb;
+// //     // blocks
+// //     EncoderBlock enc0, enc1;
+// //     Conv2dBF16 bott1, bott2; LayerNormBF16 bott_ln;
+// //     Conv2dBF16 dec1a, dec1b, dec2a, dec2b, out_conv;
+// //     // buffers
+// //     CudaBuffer temb_buf{0}, bot_tmp{0}, up_tmp{0};
+// //     std::vector<std::shared_ptr<CudaBuffer>> skips;
 
-//     inline void cat_and_conv(__nv_bfloat16 *src,
-//                          const std::shared_ptr<CudaBuffer> &skip,
-//                          Shape &s,
-//                          Conv2dBF16 &conv,
-//                          CudaBuffer &scratch,
-//                          cudaStream_t st)
-//     {
-//         // skip tensor dims: (B, skipC, H, W) – H,W match current s after upsample
-//         size_t elems = skip->size / sizeof(__nv_bfloat16);
-//         int skipC = static_cast<int>(elems / (size_t(s.B) * s.H * s.W));
+// //     inline void cat_and_conv(__nv_bfloat16 *src,
+// //                          const std::shared_ptr<CudaBuffer> &skip,
+// //                          Shape &s,
+// //                          Conv2dBF16 &conv,
+// //                          CudaBuffer &scratch,
+// //                          cudaStream_t st)
+// //     {
+// //         // skip tensor dims: (B, skipC, H, W) – H,W match current s after upsample
+// //         size_t elems = skip->size / sizeof(__nv_bfloat16);
+// //         int skipC = static_cast<int>(elems / (size_t(s.B) * s.H * s.W));
 
-//         ensure_size(scratch, size_t(s.B) * (s.C + skipC) * s.H * s.W * sizeof(__nv_bfloat16));
+// //         ensure_size(scratch, size_t(s.B) * (s.C + skipC) * s.H * s.W * sizeof(__nv_bfloat16));
 
-//         // copy skip first, then src
-//         cudaMemcpyAsync(scratch.data, skip->data, skip->size,
-//                                 cudaMemcpyDeviceToDevice, st);
-//         cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(scratch.data) +
-//                                 size_t(s.B) * skipC * s.H * s.W,
-//                                 src, size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16),
-//                                 cudaMemcpyDeviceToDevice, st);
+// //         // copy skip first, then src
+// //         cudaMemcpyAsync(scratch.data, skip->data, skip->size,
+// //                                 cudaMemcpyDeviceToDevice, st);
+// //         cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(scratch.data) +
+// //                                 size_t(s.B) * skipC * s.H * s.W,
+// //                                 src, size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16),
+// //                                 cudaMemcpyDeviceToDevice, st);
 
-//         conv.forward(reinterpret_cast<__nv_bfloat16*>(scratch.data),
-//                     s.B, s.H, s.W,
-//                     nullptr, src, st);
-//         s.C = conv.out_channels();
-//     }
-//     CudaBuffer cat_buf{0};
-// };
+// //         conv.forward(reinterpret_cast<__nv_bfloat16*>(scratch.data),
+// //                     s.B, s.H, s.W,
+// //                     nullptr, src, st);
+// //         s.C = conv.out_channels();
+// //     }
+// //     CudaBuffer cat_buf{0};
+// // };

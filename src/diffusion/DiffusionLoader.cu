@@ -52,7 +52,7 @@ std::shared_ptr<CudaBuffer> DiffusionLoader::load_bf16_tensor(safetensors::safet
 
     // ---- shape check (allow unused dims == 0) --------------------
     // ------------------------------------------------------------------
-    // 1.  tweak the helper so d1 == 0 means “1-D tensor – no 2nd dim check”
+    // 1.  tweak the helper so d1 == 0 means "1-D tensor – no 2nd dim check"
     // ------------------------------------------------------------------
     auto bad_shape=[&]{
         std::string got="(";
@@ -100,13 +100,14 @@ DiffusionWeights DiffusionLoader::load_diffusion_weights(const std::string& safe
 
     // ---------- constants from config -----------------------------
     constexpr int T = DiffusionConfig::t_emb_dim;   // 128
-    constexpr int C0 = DiffusionConfig::enc_channels[1];   // 64
-    constexpr int C1 = DiffusionConfig::enc_channels[2];   // 128
+    constexpr int C0 = DiffusionConfig::enc_channels[0];   // 1
+    constexpr int C1 = DiffusionConfig::enc_channels[1];   // 64
+    constexpr int C2 = DiffusionConfig::enc_channels[2];   // 128
 
     constexpr int DEC0_OUT = DiffusionConfig::dec_channels[0];   // 128
     constexpr int DEC1_OUT = DiffusionConfig::dec_channels[1];   //  64
-    constexpr int DEC0_IN  = C1 + C1;               // 256  (128 skip + 128 in)
-    constexpr int DEC1_IN  = DEC0_OUT + C0;         // 192  (128  + 64)
+    constexpr int DEC0_IN  = C2 + C2;               // 256  (128 skip + 128 in)
+    constexpr int DEC1_IN  = DEC0_OUT + C1;         // 192  (128  + 64)
 
     // ---------- table-drive the loads -----------------------------
     struct Entry { std::shared_ptr<CudaBuffer>* field;
@@ -121,28 +122,28 @@ DiffusionWeights DiffusionLoader::load_diffusion_weights(const std::string& safe
         { &W.t_proj2_b, "unet.time_emb.mlp.2.bias",   T,   0    },
 
         // ---------- encoder-0 -----------------------------------------
-        { &W.enc[0].conv1_w,  "unet.enc_blocks.0.conv1.weight", C0, 1, 3,3 },
-        { &W.enc[0].conv1_b,  "unet.enc_blocks.0.conv1.bias",   C0, 0      },
-        { &W.enc[0].conv2_w,  "unet.enc_blocks.0.conv2.weight", C0, C0,3,3 },
-        { &W.enc[0].conv2_b,  "unet.enc_blocks.0.conv2.bias",   C0, 0      },
-        { &W.enc[0].t_proj_w, "unet.enc_blocks.0.time_proj.weight", C0, T  },
-        { &W.enc[0].t_proj_b, "unet.enc_blocks.0.time_proj.bias",   C0, 0  },
+        { &W.enc[0].conv1_w,  "unet.enc_blocks.0.conv1.weight", C1, C0, 3,3 },
+        { &W.enc[0].conv1_b,  "unet.enc_blocks.0.conv1.bias",   C1, 0      },
+        { &W.enc[0].conv2_w,  "unet.enc_blocks.0.conv2.weight", C1, C1,3,3 },
+        { &W.enc[0].conv2_b,  "unet.enc_blocks.0.conv2.bias",   C1, 0      },
+        { &W.enc[0].t_proj_w, "unet.enc_blocks.0.time_proj.weight", C1, T  },
+        { &W.enc[0].t_proj_b, "unet.enc_blocks.0.time_proj.bias",   C1, 0  },
 
         // ---------- encoder-1 -----------------------------------------
-        { &W.enc[1].conv1_w,  "unet.enc_blocks.1.conv1.weight", C1, C0,3,3 },
-        { &W.enc[1].conv1_b,  "unet.enc_blocks.1.conv1.bias",   C1, 0      },
-        { &W.enc[1].conv2_w,  "unet.enc_blocks.1.conv2.weight", C1, C1,3,3 },
-        { &W.enc[1].conv2_b,  "unet.enc_blocks.1.conv2.bias",   C1, 0      },
-        { &W.enc[1].t_proj_w, "unet.enc_blocks.1.time_proj.weight", C1, T  },
-        { &W.enc[1].t_proj_b, "unet.enc_blocks.1.time_proj.bias",   C1, 0  },
+        { &W.enc[1].conv1_w,  "unet.enc_blocks.1.conv1.weight", C2, C1,3,3 },
+        { &W.enc[1].conv1_b,  "unet.enc_blocks.1.conv1.bias",   C2, 0      },
+        { &W.enc[1].conv2_w,  "unet.enc_blocks.1.conv2.weight", C2, C2,3,3 },
+        { &W.enc[1].conv2_b,  "unet.enc_blocks.1.conv2.bias",   C2, 0      },
+        { &W.enc[1].t_proj_w, "unet.enc_blocks.1.time_proj.weight", C2, T  },
+        { &W.enc[1].t_proj_b, "unet.enc_blocks.1.time_proj.bias",   C2, 0  },
 
         // ---------- bottleneck ----------------------------------------
-        { &W.bott1_w,       "unet.bottleneck.conv1.weight", C1, C1,3,3 },
-        { &W.bott1_b,       "unet.bottleneck.conv1.bias",   C1, 0      },
-        { &W.bott2_w,       "unet.bottleneck.conv2.weight", C1, C1,3,3 },
-        { &W.bott2_b,       "unet.bottleneck.conv2.bias",   C1, 0      },
-        { &W.bott_t_w,      "unet.bottleneck.time_proj.weight", C1, T  },
-        { &W.bott_t_b,      "unet.bottleneck.time_proj.bias",   C1, 0  },
+        { &W.bott1_w,       "unet.bottleneck.conv1.weight", C2, C2,3,3 },
+        { &W.bott1_b,       "unet.bottleneck.conv1.bias",   C2, 0      },
+        { &W.bott2_w,       "unet.bottleneck.conv2.weight", C2, C2,3,3 },
+        { &W.bott2_b,       "unet.bottleneck.conv2.bias",   C2, 0      },
+        { &W.bott_t_w,      "unet.bottleneck.time_proj.weight", C2, T  },
+        { &W.bott_t_b,      "unet.bottleneck.time_proj.bias",   C2, 0  },
 
         // ---------- decoder block 0 -----------------------------------
         { &W.dec[0].conv1_w,  "unet.dec_blocks.0.conv1.weight", DEC0_OUT, DEC0_IN,3,3 },

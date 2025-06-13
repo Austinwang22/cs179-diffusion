@@ -34,8 +34,6 @@ def euler_sampler(net, num_samples, num_steps=18, sigma_min=0.002,
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--img_resolution', type=int, default=28)
-    parser.add_argument('--num_epochs', type=int, default=2)
-    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--save_folder', type=str, default='exp/ckpts/')
     parser.add_argument('--filename', type=str, default='model.pt')
     parser.add_argument('--Pmean', type=float, default=-1.2)

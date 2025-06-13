@@ -60,8 +60,11 @@ __global__ void add_time_bias_kernel(__nv_bfloat16 *y,
     size_t N   = size_t(B) * C * H * W;
     if (idx >= N) return;
 
-    int b = idx / (C * H * W);
-    int c = (idx / H * W) % C;
+    // Calculate batch and channel indices correctly
+    size_t hw = size_t(H) * W;
+    size_t chw = size_t(C) * hw;
+    int b = int(idx / chw);  // Batch index
+    int c = int((idx % chw) / hw);  // Channel index
 
     float v = __bfloat162float(y[idx]) + bias32[b * C + c];
     y[idx]  = __float2bfloat16(v);       // single rounding

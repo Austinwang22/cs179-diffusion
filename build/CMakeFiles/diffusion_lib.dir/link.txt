@@ -1,2 +1,0 @@
-/usr/bin/ar qc libdiffusion_lib.a CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o
-/usr/bin/ranlib libdiffusion_lib.a
