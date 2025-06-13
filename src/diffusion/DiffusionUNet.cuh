@@ -89,11 +89,6 @@ public:
 
         dump_chw("x after conv2", x, outC2, s.H, s.W, st);
 
-        //---------------- save skip BEFORE pooling ------------------
-        auto saved = std::make_shared<CudaBuffer>(xbBytes);
-        cudaMemcpyAsync(saved->data, x, xbBytes, cudaMemcpyDeviceToDevice, st);
-        skips.push_back(saved);
-
         //---------------- MaxPool ↓2 --------------------------------
         pool->forward(x, B, s.C, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
         cudaMemcpyAsync(x, tmp->data,
@@ -102,7 +97,16 @@ public:
         s.H /= 2;  s.W /= 2;
 
         dump_chw("x pooling", x, outC2, s.H, s.W, st);
+
+        //---------------- save skip AFTER pooling ------------------
+        auto saved = std::make_shared<CudaBuffer>(size_t(B)*s.C*s.H*s.W*sizeof(__nv_bfloat16));
+        cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
+        skips.push_back(saved);
+
         std::cerr << "============================\n";
+
+        // Print the shape of the weights of conv2
+        std::cout << "conv2 weights shape: [" << conv2->outC_ << ", " << conv2->inC_ << "]" << std::endl;
     }
 };
 
@@ -151,7 +155,7 @@ public:
     std::shared_ptr<LinearBF16>      t_proj;
 
     // scratch
-    std::shared_ptr<CudaBuffer> catBuf, tbuf;
+    std::shared_ptr<CudaBuffer> catBuf, tbuf, tmp, upBuf;  // Added upBuf for upconv output
 
     explicit DecoderBlockBF16(int outC) : outC_(outC) {}
 
@@ -168,13 +172,10 @@ public:
         if (!catBuf || catBuf->size < catBytes) catBuf = std::make_shared<CudaBuffer>(catBytes);
 
         // concat along channel dim
-        // cudaMemcpyAsync(catBuf->data, skip.buf->data, skip.buf->size, cudaMemcpyDeviceToDevice, st);
-        // cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(catBuf->data) + skipC * B * H * W,
-        //                 x, size_t(B)*s.C*H*W*sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, st);
-        cudaMemcpyAsync(catBuf->data, skip->data, skip->size, cudaMemcpyDeviceToDevice, st);
-        cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(catBuf->data) + skipC * s.B * s.H * s.W,
-                        x, size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16),
+        cudaMemcpyAsync(catBuf->data, x, size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16),
                         cudaMemcpyDeviceToDevice, st);
+        cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(catBuf->data) + s.C * s.B * s.H * s.W,
+                        skip->data, skip->size, cudaMemcpyDeviceToDevice, st);
 
         // tbias for this block
         size_t tbBytes = size_t(B) * conv1->outC_ * sizeof(__nv_bfloat16);
@@ -186,14 +187,56 @@ public:
 
         // conv‑1 / conv‑2 / upsample
         conv1->forward(reinterpret_cast<__nv_bfloat16*>(catBuf->data), B, H, W, x, st);
+
         add_time_bias(x, tbias, B, outC_, H, W, st);
+
+        relu_inplace(x, size_t(B)*outC_*H*W, st);
+        
+        // Use temporary buffer for conv2 output
+        size_t tmpBytes = size_t(B) * outC_ * H * W * sizeof(__nv_bfloat16);
+        if (!tmp || tmp->size < tmpBytes) tmp = std::make_shared<CudaBuffer>(tmpBytes);
+        
+        conv2->forward(x, B, H, W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
+        cudaMemcpyAsync(x, tmp->data, tmpBytes, cudaMemcpyDeviceToDevice, st);
+
+        add_time_bias(x, tbias, B, outC_, H, W, st);
+
         relu_inplace(x, size_t(B)*outC_*H*W, st);
 
-        conv2->forward(x, B, H, W, x, st);
-        add_time_bias(x, tbias, B, outC_, H, W, st);
-        relu_inplace(x, size_t(B)*outC_*H*W, st);
+        // Print the number of nonzero elements in x
+        int num_nonzero = 0;
+        for (int i = 0; i < B*outC_*H*W; ++i) {
+            if (x[i] != __nv_bfloat16(0)) {
+                num_nonzero++;
+            }
+        }
+        std::cout << "number of nonzero elements in x: " << num_nonzero << std::endl;
 
-        up->forward(x, B, H, W, x, st);
+        // // Debug print before upconv
+        // std::cout << "Before upconv - first 16 elements: ";
+        // std::vector<__nv_bfloat16> h(16);
+        // cudaMemcpy(h.data(), x, 16 * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost);
+        // for (int i = 0; i < 16; ++i) {
+        //     std::cout << __bfloat162float(h[i]) << " ";
+        // }
+        // std::cout << std::endl;
+
+        // Use separate buffer for upconv output
+        size_t upBytes = size_t(B) * outC_ * (H * 2) * (W * 2) * sizeof(__nv_bfloat16);
+        if (!upBuf || upBuf->size < upBytes) upBuf = std::make_shared<CudaBuffer>(upBytes);
+        
+        up->forward(x, B, H, W, reinterpret_cast<__nv_bfloat16*>(upBuf->data), st);
+        cudaMemcpyAsync(x, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st);
+
+        // Debug print after upconv
+        // std::cout << "After upconv - first 16 elements: ";
+        // cudaMemcpy(h.data(), x, 16 * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost);
+        // for (int i = 0; i < 16; ++i) {
+        //     std::cout << __bfloat162float(h[i]) << " ";
+        // }
+        // std::cout << std::endl;
+
+        dump_chw("x after upconv", x, outC_, H, W, st);
         s.H *= 2;  s.W *= 2;  s.C = outC_;
     }
 };
@@ -236,10 +279,21 @@ public:
         enc1->forward(x, s, temb, skips, st); // working
 
         bott->forward(x, s, temb, st);
+
+        dump_chw("x after bottleneck", x, s.C, s.H, s.W, st);
+
         dec0->forward(x, s, skips.back(), temb, st); skips.pop_back();
+
+        dump_chw("x after decoder0", x, s.C, s.H, s.W, st);
+
         dec1->forward(x, s, skips.back(), temb, st); skips.pop_back();
 
-        out_conv1->forward(x, s.B, s.H, s.W, x, st);   // 1×1 conv head
+        dump_chw("x after decoder1", x, s.C, s.H, s.W, st);
+
+        out_conv1->forward(x, s.B, s.H, s.W, x, st);  
+        
+        dump_chw("x after out_conv1", x, s.C, s.H, s.W, st);
+        // 1×1 conv head
     }
 
 private:
@@ -275,7 +329,7 @@ private:
 //         // auto tbuf = std::make_unique<CudaBuffer>(s.B * conv1->outC_ * sizeof(__nv_bfloat16));
 //         // for (int b = 0; b < s.B; ++b) {
 //         //     t_proj->forward(
-//         //         temb + b * t_proj->in_f,                     //<– each batch’s slice of temb
+//         //         temb + b * t_proj->in_f,                     //<– each batch's slice of temb
 //         //         reinterpret_cast<__nv_bfloat16*>(tbuf->data) 
 //         //         + b * conv1->outC_,                        //<– write into the b-th bias slot
 //         //         st);

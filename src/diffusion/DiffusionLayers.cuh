@@ -177,83 +177,232 @@ private:
 // -----------------------------------------------------------------------------
 // 3.  ConvTranspose2dBF16 (2×2, stride-2) – for decoder up-sampling
 // -----------------------------------------------------------------------------
+// ConvTranspose2dBF16 – writes straight into y, pure-device scratch
 class ConvTrans2dBF16 {
 public:
-    int in{0},out{0};
-    std::shared_ptr<const CudaBuffer> W_, b_;
-    std::shared_ptr<CudaBuffer> ws_;
+    int in, out;
 
-    ConvTrans2dBF16(int inC, int outC): in(inC), out(outC)
+    // filter + bias (owned)
+    std::shared_ptr<const CudaBuffer> W_, b_;
+
+    // pure‐device workspace
+    void*   ws_data{nullptr};
+    size_t  ws_bytes{0};
+
+    // cuDNN descriptors
+    cudnnTensorDescriptor_t        x_desc{}, y_desc{};
+    cudnnFilterDescriptor_t        w_desc{};
+    cudnnConvolutionDescriptor_t   deconv_desc{};
+    cudnnConvolutionBwdDataAlgo_t  algo{CUDNN_CONVOLUTION_BWD_DATA_ALGO_0};
+
+    explicit ConvTrans2dBF16(int inC, int outC)
+      : in(inC), out(outC)
     {
-        // 1. allocate  (Cout, Cin, 2, 2)
-        W_ = std::make_shared<const CudaBuffer>(size_t(out) * in * 4 * sizeof(__nv_bfloat16));
-        b_ = std::make_shared<const CudaBuffer>(size_t(out) * sizeof(__nv_bfloat16));
+        // 1) allocate filter [Cin, Cout, 2, 2]
+        W_ = std::make_shared<const CudaBuffer>(
+                size_t(in) * out * 2 * 2 * sizeof(__nv_bfloat16));
+        b_ = std::make_shared<const CudaBuffer>(
+                size_t(out) * sizeof(__nv_bfloat16));
 
         auto &dnn = Handles::get().dnn;
 
-        // 2. filter descriptor (Cout, Cin, kH, kW)
+        // 2) filter descriptor: K==in, C==out
         cudnnCreateFilterDescriptor(&w_desc);
-        cudnnSetFilter4dDescriptor(w_desc, CUDNN_DATA_BFLOAT16,
-                                CUDNN_TENSOR_NCHW,
-                                out, in, 2, 2);            // ← fixed order
+        cudnnSetFilter4dDescriptor(
+            w_desc,
+            CUDNN_DATA_BFLOAT16, CUDNN_TENSOR_NCHW,
+            /*K=*/in, /*C=*/out, /*kH=*/2, /*kW=*/2);
 
-        // 3. convolution descriptor: stride=2, pad=0
+        // 3) convolution descriptor: stride=2, pad=0
         cudnnCreateConvolutionDescriptor(&deconv_desc);
-        cudnnSetConvolution2dDescriptor(deconv_desc,
-            /*padH,W=*/0, 0,
-            /*strH,W=*/2, 2,
-            /*dilH,W=*/1, 1,
-            CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT); // BFLOAT16
-        cudnnSetConvolutionMathType(deconv_desc, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
+        cudnnSetConvolution2dDescriptor(
+            deconv_desc,
+            /*padH=*/0, /*padW=*/0,
+            /*strideH=*/2, /*strideW=*/2,
+            /*dilationH=*/1, /*dilationW=*/1,
+            CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT);
+        cudnnSetConvolutionMathType(
+            deconv_desc, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
 
+        // 4) tensor descriptors (empty for now)
         cudnnCreateTensorDescriptor(&x_desc);
         cudnnCreateTensorDescriptor(&y_desc);
-
-        algo = CUDNN_CONVOLUTION_BWD_DATA_ALGO_1;   // fast for small kernels
     }
 
-    ~ConvTrans2dBF16(){
-        cudnnDestroyTensorDescriptor(x_desc); cudnnDestroyTensorDescriptor(y_desc);
-        cudnnDestroyFilterDescriptor(w_desc);  cudnnDestroyConvolutionDescriptor(deconv_desc);
+    ~ConvTrans2dBF16() noexcept {
+        if (ws_data) cudaFree(ws_data);
+        cudnnDestroyTensorDescriptor(x_desc);
+        cudnnDestroyTensorDescriptor(y_desc);
+        cudnnDestroyFilterDescriptor(w_desc);
+        cudnnDestroyConvolutionDescriptor(deconv_desc);
     }
 
-    void forward(const __nv_bfloat16 *x, int B, int H, int W,
-                 __nv_bfloat16 *y, cudaStream_t s)
+    void forward(const __nv_bfloat16 *x,
+                 int B, int H, int W,
+                 __nv_bfloat16       *y,
+                 cudaStream_t         s)
     {
-        auto &dnn = Handles::get().dnn;  cudnnSetStream(dnn, s);
+        auto &dnn = Handles::get().dnn;
+        cudnnSetStream(dnn, s);
 
-        cudnnSetTensor4dDescriptor(x_desc, CUDNN_TENSOR_NCHW,
-                                CUDNN_DATA_BFLOAT16, B, in,  H,  W);
-        cudnnSetTensor4dDescriptor(y_desc, CUDNN_TENSOR_NCHW,
-                                CUDNN_DATA_BFLOAT16, B, out, H*2, W*2);
+        // set input/output shapes
+        cudnnSetTensor4dDescriptor(
+            x_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+            /*N=*/B, /*C=*/in, /*H=*/H, /*W=*/W);
+        cudnnSetTensor4dDescriptor(
+            y_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+            /*N=*/B, /*C=*/out, /*H=*/H*2, /*W=*/W*2);
 
-        size_t wsB = 0;
+        // pick best algo
+        cudnnConvolutionBwdDataAlgoPerf_t perf;
+        int found=0;
+        cudnnFindConvolutionBackwardDataAlgorithm(
+            dnn, w_desc, x_desc, deconv_desc, y_desc,
+            /*requestAlgoCount=*/1, &found, &perf);
+        algo = perf.algo;
+
+        // workspace size
+        size_t want;
         cudnnGetConvolutionBackwardDataWorkspaceSize(
-            dnn, w_desc, x_desc, deconv_desc, y_desc, algo, &wsB);
-        if (!ws_ || ws_->size < wsB)
-            ws_ = std::make_shared<CudaBuffer>(wsB);
-        // auto ws_ = std::make_unique<CudaBuffer>(wsB);
+            dnn, w_desc, x_desc, deconv_desc, y_desc,
+            algo, &want);
 
-        const float alpha = 1.f, beta = 0.f;
+        // grow device workspace if needed
+        if (want > ws_bytes) {
+            if (ws_data) cudaFree(ws_data);
+            cudaMalloc(&ws_data, want);
+            ws_bytes = want;
+        }
+
+        // run deconv→y
+        const float alpha=1.f, beta=0.f;
         cudnnConvolutionBackwardData(
             dnn, &alpha,
-            w_desc, W_->data,          // filter
-            x_desc, x,                // dy
+            w_desc, W_->data,   // filter
+            x_desc, x,          // dy
             deconv_desc, algo,
-            ws_->data, ws_->size,
+            ws_data, ws_bytes,
             &beta,
-            y_desc, y);               // dx  (our upsampled output)
+            y_desc, y);         // dx == output
 
-        add_bias_conv(y, static_cast<const __nv_bfloat16*>(b_->data), size_t(B), out, H*2, W*2, s);
+        // add per-channel bias in-place
+        add_bias_conv(y,
+                     static_cast<const __nv_bfloat16*>(b_->data),
+                     /*B=*/B, /*C=*/out,
+                     /*H=*/H*2, /*W=*/W*2,
+                     s);
+
+        // Ensure all operations are complete before next use
+        cudaStreamSynchronize(s);
         cudaGetLastError();
     }
-
-private:
-    cudnnTensorDescriptor_t x_desc{},y_desc{};
-    cudnnFilterDescriptor_t w_desc{};
-    cudnnConvolutionDescriptor_t deconv_desc{};
-    cudnnConvolutionBwdDataAlgo_t algo{};
 };
+
+// class ConvTrans2dBF16 {
+// public:
+//     int in, out;
+//     std::shared_ptr<const CudaBuffer> W_, b_;
+//     std::shared_ptr<CudaBuffer>       ws_;
+//     std::shared_ptr<CudaBuffer>       tmp_;  // Temporary buffer for output
+
+//     explicit ConvTrans2dBF16(int inC, int outC) : in(inC), out(outC)
+//     {
+//         /* 1.  Allocate filter in  (Cin, Cout, kH, kW) order  */
+//         W_ = std::make_shared<const CudaBuffer>(
+//                 size_t(in) * out * 4 * sizeof(__nv_bfloat16));       // 2×2
+//         b_ = std::make_shared<const CudaBuffer>(
+//                 size_t(out) * sizeof(__nv_bfloat16));
+
+//         auto &dnn = Handles::get().dnn;
+
+//         /* 2.  Descriptors -------------------------------------------------- */
+//         cudnnCreateFilterDescriptor(&w_desc);
+//         cudnnSetFilter4dDescriptor(w_desc,            // K == in, C == out
+//             CUDNN_DATA_BFLOAT16, CUDNN_TENSOR_NCHW,
+//             in, out, 2, 2);
+
+//         cudnnCreateConvolutionDescriptor(&deconv_desc);
+//         cudnnSetConvolution2dDescriptor(
+//             deconv_desc,
+//             0, 0,          // padH, padW
+//             2, 2,          // stride
+//             1, 1,          // dilation
+//             CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT);
+//         cudnnSetConvolutionMathType(
+//             deconv_desc, CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION);
+
+//         cudnnCreateTensorDescriptor(&x_desc);
+//         cudnnCreateTensorDescriptor(&y_desc);
+//         algo = CUDNN_CONVOLUTION_BWD_DATA_ALGO_0;     // default
+//     }
+
+//     ~ConvTrans2dBF16() {
+//         cudnnDestroyTensorDescriptor(x_desc);
+//         cudnnDestroyTensorDescriptor(y_desc);
+//         cudnnDestroyFilterDescriptor(w_desc);
+//         cudnnDestroyConvolutionDescriptor(deconv_desc);
+//     }
+
+//     void forward(const __nv_bfloat16 *x, int B, int H, int W,
+//                  __nv_bfloat16 *y, cudaStream_t s)
+//     {
+//         auto &dnn = Handles::get().dnn;
+//         cudnnSetStream(dnn, s);
+
+//         /* 3.  Tensor descriptors  */
+//         cudnnSetTensor4dDescriptor(
+//             x_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+//             B, in, H, W);
+//         cudnnSetTensor4dDescriptor(
+//             y_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_BFLOAT16,
+//             B, out, H * 2, W * 2);
+
+//         /* 4.  Workspace selection  */
+//         cudnnConvolutionBwdDataAlgoPerf_t perf;
+//         int nAlgo;
+//         cudnnFindConvolutionBackwardDataAlgorithm(
+//             dnn, w_desc, x_desc, deconv_desc, y_desc,
+//             1, &nAlgo, &perf);
+//         algo = perf.algo;
+
+//         size_t wsBytes = 0;
+//         cudnnGetConvolutionBackwardDataWorkspaceSize(
+//             dnn, w_desc, x_desc, deconv_desc, y_desc, algo, &wsBytes);
+//         if (!ws_ || ws_->size < wsBytes)
+//             ws_ = std::make_shared<CudaBuffer>(wsBytes);
+
+//         /* 5.  Allocate temporary output buffer */
+//         size_t tmpBytes = size_t(B) * out * (H * 2) * (W * 2) * sizeof(__nv_bfloat16);
+//         if (!tmp_ || tmp_->size < tmpBytes)
+//             tmp_ = std::make_shared<CudaBuffer>(tmpBytes);
+
+//         /* 6.  Actual compute  */
+//         const float alpha = 1.f, beta = 0.f;
+//         cudnnConvolutionBackwardData(
+//             dnn, &alpha,
+//             w_desc, W_->data,
+//             x_desc, x,
+//             deconv_desc, algo,
+//             ws_->data, ws_->size,
+//             &beta,
+//             y_desc, reinterpret_cast<__nv_bfloat16*>(tmp_->data));
+
+//         /* 7.  Add per-channel bias  */
+//         add_bias_conv(reinterpret_cast<__nv_bfloat16*>(tmp_->data), 
+//                      static_cast<const __nv_bfloat16*>(b_->data),
+//                      B, out, H * 2, W * 2, s);
+
+//         /* 8.  Copy result to output and ensure completion */
+//         cudaMemcpyAsync(y, tmp_->data, tmpBytes, cudaMemcpyDeviceToDevice, s);
+//         cudaStreamSynchronize(s);  // Ensure the operation is complete before next use
+//     }
+
+// private:
+//     cudnnTensorDescriptor_t        x_desc{}, y_desc{};
+//     cudnnFilterDescriptor_t        w_desc{};
+//     cudnnConvolutionDescriptor_t   deconv_desc{};
+//     cudnnConvolutionBwdDataAlgo_t  algo{};
+// };
 
 // ========== MaxPool2d (2×2, stride‑2) ========================================
 class MaxPool2dBF16 {

@@ -60,11 +60,17 @@ class DecoderBlock(torch.nn.Module):
         self.time_proj = torch.nn.Linear(t_emb_dim, out_channels)
     
     def forward(self, x, t_emb, skip):
-        x = torch.cat([x, skip], dim=1)
+        x = torch.cat([x, skip], dim=1)        
         t_proj = self.time_proj(t_emb).unsqueeze(-1).unsqueeze(-1)
-        h = self.act(self.conv1(x) + t_proj)
-        h = self.act(self.conv2(h) + t_proj)
+        h = self.conv1(x)
+        h += t_proj
+        h = self.act(h)
+        h = self.conv2(h)
+        h += t_proj
+        h = self.act(h)  
+        print(f'first 16 elements of relu output: {h.flatten()[0:16]}')
         h = self.upsample(h)
+        print(f'first 16 elements of upconv output: {h.flatten()[0:16]}')
         return h
     
 class Bottleneck(torch.nn.Module):
@@ -113,9 +119,16 @@ class UNet(torch.nn.Module):
             out = enc_block(x, t_emb)
             enc_outs.append(out)
             x = out
+            
+        # print(f'encoder output: {x.flatten()[0:16]}')
+            
         x = self.bottleneck(x, t_emb)
+        
+        print(f'\nbottleneck output: {x.flatten()[0:16]}')
+        
         for i, dec_block in enumerate(self.dec_blocks):
             x = dec_block(x, t_emb, enc_outs.pop())
+            # print(f'\ndecoder {i} output: {x.flatten()[0:16]}')
         return self.out_conv(x)
     
 class EDMPrecond(torch.nn.Module):

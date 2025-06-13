@@ -1,6 +1,7 @@
 CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o: \
- /home/bkwang/cs179-diffusion/src/HostBuffer.cpp \
- /usr/include/stdc-predef.h /home/bkwang/cs179-diffusion/src/HostBuffer.h \
+ /home/akwang/cs179-diffusion-4/src/HostBuffer.cpp \
+ /usr/include/stdc-predef.h \
+ /home/akwang/cs179-diffusion-4/src/HostBuffer.h \
  /usr/include/c++/11/cstddef \
  /usr/include/x86_64-linux-gnu/c++/11/bits/c++config.h \
  /usr/include/x86_64-linux-gnu/c++/11/bits/os_defines.h \
