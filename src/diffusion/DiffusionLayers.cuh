@@ -182,12 +182,8 @@ class ConvTrans2dBF16 {
 public:
     int in, out;
 
-    // filter + bias (owned)
     std::shared_ptr<const CudaBuffer> W_, b_;
-
-    // pure‐device workspace
-    void*   ws_data{nullptr};
-    size_t  ws_bytes{0};
+    std::shared_ptr<CudaBuffer> ws_data;  // <-- persistent scratch
 
     // cuDNN descriptors
     cudnnTensorDescriptor_t        x_desc{}, y_desc{};
@@ -204,14 +200,12 @@ public:
         b_ = std::make_shared<const CudaBuffer>(
                 size_t(out) * sizeof(__nv_bfloat16));
 
-        auto &dnn = Handles::get().dnn;
-
         // 2) filter descriptor: K==in, C==out
         cudnnCreateFilterDescriptor(&w_desc);
         cudnnSetFilter4dDescriptor(
             w_desc,
             CUDNN_DATA_BFLOAT16, CUDNN_TENSOR_NCHW,
-            /*K=*/in, /*C=*/out, /*kH=*/2, /*kW=*/2);
+            /*K=*/out, /*C=*/in, /*kH=*/2, /*kW=*/2);
 
         // 3) convolution descriptor: stride=2, pad=0
         cudnnCreateConvolutionDescriptor(&deconv_desc);
@@ -227,10 +221,9 @@ public:
         // 4) tensor descriptors (empty for now)
         cudnnCreateTensorDescriptor(&x_desc);
         cudnnCreateTensorDescriptor(&y_desc);
-    }
+        }
 
     ~ConvTrans2dBF16() noexcept {
-        if (ws_data) cudaFree(ws_data);
         cudnnDestroyTensorDescriptor(x_desc);
         cudnnDestroyTensorDescriptor(y_desc);
         cudnnDestroyFilterDescriptor(w_desc);
@@ -242,6 +235,23 @@ public:
                  __nv_bfloat16       *y,
                  cudaStream_t         s)
     {
+        std::cerr << "BEFORE STATS\n";
+        std::cerr << "ConvTrans2dBF16: B=" << B << ", H=" << H << ", W=" << W
+                  << ", in=" << in << ", out=" << out << std::endl;
+
+        // Print the number of nonzero elements in x
+        int num_nonzero = 0;
+        for (int i = 0; i < B*out*H*W; ++i) {
+            if (x[i] != __nv_bfloat16(0)) {
+                num_nonzero++;
+            }
+        }
+        std::cout << "number of nonzero elements in x: " << num_nonzero << std::endl;
+        dump_chw("ConvTrans2dBF16: x", x, in, H, W, s);
+        dump_chw("ConvTrans2dBF16: y", y, out, H * 2, W * 2, s);
+        dump_chw("ConvTrans2dBF16: b", reinterpret_cast<const __nv_bfloat16*>(b_->data), out, 1, 1, s);
+        dump_chw("ConvTrans2dBF16: W", reinterpret_cast<const __nv_bfloat16*>(W_->data), out, in, 2, s);
+
         auto &dnn = Handles::get().dnn;
         cudnnSetStream(dnn, s);
 
@@ -266,12 +276,8 @@ public:
         cudnnGetConvolutionBackwardDataWorkspaceSize(
             dnn, w_desc, x_desc, deconv_desc, y_desc,
             algo, &want);
-
-        // grow device workspace if needed
-        if (want > ws_bytes) {
-            if (ws_data) cudaFree(ws_data);
-            cudaMalloc(&ws_data, want);
-            ws_bytes = want;
+        if (!ws_data || ws_data->size < want) {
+            ws_data = std::make_shared<CudaBuffer>(want);
         }
 
         // run deconv→y
@@ -281,11 +287,11 @@ public:
             w_desc, W_->data,   // filter
             x_desc, x,          // dy
             deconv_desc, algo,
-            ws_data, ws_bytes,
+            ws_data->data, ws_data->size,
             &beta,
             y_desc, y);         // dx == output
 
-        // add per-channel bias in-place
+        // // add per-channel bias in-place
         add_bias_conv(y,
                      static_cast<const __nv_bfloat16*>(b_->data),
                      /*B=*/B, /*C=*/out,
@@ -293,7 +299,12 @@ public:
                      s);
 
         // Ensure all operations are complete before next use
-        cudaStreamSynchronize(s);
+        // cudaStreamSynchronize(s);
+
+        std::cerr << "AFTER STATS\n";
+        dump_chw("ConvTrans2dBF16: x", x, in, H, W, s);
+        dump_chw("ConvTrans2dBF16: y", y, out, H * 2, W * 2, s);
+
         cudaGetLastError();
     }
 };

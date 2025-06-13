@@ -53,10 +53,10 @@ RM = /usr/local/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/akwang/cs179-diffusion-4
+CMAKE_SOURCE_DIR = /home/bkwang/scratch/cs179-diffusion
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/akwang/cs179-diffusion-4/build
+CMAKE_BINARY_DIR = /home/bkwang/scratch/cs179-diffusion/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/diffusion_lib.dir/depend.make
@@ -73,25 +73,25 @@ CMakeFiles/diffusion_lib.dir/codegen:
 .PHONY : CMakeFiles/diffusion_lib.dir/codegen
 
 CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: CMakeFiles/diffusion_lib.dir/flags.make
-CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/akwang/cs179-diffusion-4/src/vendor/safetensors_impl.cpp
+CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: /home/bkwang/scratch/cs179-diffusion/src/vendor/safetensors_impl.cpp
 CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o: CMakeFiles/diffusion_lib.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o -MF CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o.d -o CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o -c /home/akwang/cs179-diffusion-4/src/vendor/safetensors_impl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o -MF CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o.d -o CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.o -c /home/bkwang/scratch/cs179-diffusion/src/vendor/safetensors_impl.cpp
 
 CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/akwang/cs179-diffusion-4/src/vendor/safetensors_impl.cpp > CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/bkwang/scratch/cs179-diffusion/src/vendor/safetensors_impl.cpp > CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.i
 
 CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/akwang/cs179-diffusion-4/src/vendor/safetensors_impl.cpp -o CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/bkwang/scratch/cs179-diffusion/src/vendor/safetensors_impl.cpp -o CMakeFiles/diffusion_lib.dir/src/vendor/safetensors_impl.cpp.s
 
 CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o: CMakeFiles/diffusion_lib.dir/flags.make
 CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o: CMakeFiles/diffusion_lib.dir/includes_CUDA.rsp
-CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o: /home/akwang/cs179-diffusion-4/src/CudaBuffer.cu
+CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o: /home/bkwang/scratch/cs179-diffusion/src/CudaBuffer.cu
 CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o: CMakeFiles/diffusion_lib.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o"
-	/usr/local/cuda-12.5/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o -MF CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o.d -x cu -c /home/akwang/cs179-diffusion-4/src/CudaBuffer.cu -o CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o"
+	/usr/local/cuda-12.5/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o -MF CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o.d -x cu -c /home/bkwang/scratch/cs179-diffusion/src/CudaBuffer.cu -o CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o
 
 CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CUDA source to CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.i"
@@ -102,25 +102,25 @@ CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.s: cmake_force
 	$(CMAKE_COMMAND) -E cmake_unimplemented_variable CMAKE_CUDA_CREATE_ASSEMBLY_SOURCE
 
 CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o: CMakeFiles/diffusion_lib.dir/flags.make
-CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o: /home/akwang/cs179-diffusion-4/src/HostBuffer.cpp
+CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o: /home/bkwang/scratch/cs179-diffusion/src/HostBuffer.cpp
 CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o: CMakeFiles/diffusion_lib.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o -MF CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o.d -o CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o -c /home/akwang/cs179-diffusion-4/src/HostBuffer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o -MF CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o.d -o CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o -c /home/bkwang/scratch/cs179-diffusion/src/HostBuffer.cpp
 
 CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/akwang/cs179-diffusion-4/src/HostBuffer.cpp > CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/bkwang/scratch/cs179-diffusion/src/HostBuffer.cpp > CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.i
 
 CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/akwang/cs179-diffusion-4/src/HostBuffer.cpp -o CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/bkwang/scratch/cs179-diffusion/src/HostBuffer.cpp -o CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.s
 
 CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: CMakeFiles/diffusion_lib.dir/flags.make
 CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: CMakeFiles/diffusion_lib.dir/includes_CUDA.rsp
-CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/akwang/cs179-diffusion-4/src/diffusion/DiffusionLoader.cu
+CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionLoader.cu
 CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o: CMakeFiles/diffusion_lib.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CUDA object CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o"
-	/usr/local/cuda-12.5/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o -MF CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o.d -x cu -c /home/akwang/cs179-diffusion-4/src/diffusion/DiffusionLoader.cu -o CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CUDA object CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o"
+	/usr/local/cuda-12.5/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o -MF CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o.d -x cu -c /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionLoader.cu -o CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o
 
 CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CUDA source to CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.i"
@@ -146,7 +146,7 @@ libdiffusion_lib.a: CMakeFiles/diffusion_lib.dir/src/HostBuffer.cpp.o
 libdiffusion_lib.a: CMakeFiles/diffusion_lib.dir/src/diffusion/DiffusionLoader.cu.o
 libdiffusion_lib.a: CMakeFiles/diffusion_lib.dir/build.make
 libdiffusion_lib.a: CMakeFiles/diffusion_lib.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking CXX static library libdiffusion_lib.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking CXX static library libdiffusion_lib.a"
 	$(CMAKE_COMMAND) -P CMakeFiles/diffusion_lib.dir/cmake_clean_target.cmake
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/diffusion_lib.dir/link.txt --verbose=$(VERBOSE)
 
@@ -159,6 +159,6 @@ CMakeFiles/diffusion_lib.dir/clean:
 .PHONY : CMakeFiles/diffusion_lib.dir/clean
 
 CMakeFiles/diffusion_lib.dir/depend:
-	cd /home/akwang/cs179-diffusion-4/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/akwang/cs179-diffusion-4 /home/akwang/cs179-diffusion-4 /home/akwang/cs179-diffusion-4/build /home/akwang/cs179-diffusion-4/build /home/akwang/cs179-diffusion-4/build/CMakeFiles/diffusion_lib.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /home/bkwang/scratch/cs179-diffusion/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/bkwang/scratch/cs179-diffusion /home/bkwang/scratch/cs179-diffusion /home/bkwang/scratch/cs179-diffusion/build /home/bkwang/scratch/cs179-diffusion/build /home/bkwang/scratch/cs179-diffusion/build/CMakeFiles/diffusion_lib.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/diffusion_lib.dir/depend
 

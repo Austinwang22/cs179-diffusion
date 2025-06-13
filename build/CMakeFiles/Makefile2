@@ -54,10 +54,10 @@ RM = /usr/local/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/akwang/cs179-diffusion-4
+CMAKE_SOURCE_DIR = /home/bkwang/scratch/cs179-diffusion
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/akwang/cs179-diffusion-4/build
+CMAKE_BINARY_DIR = /home/bkwang/scratch/cs179-diffusion/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -88,14 +88,14 @@ clean: CMakeFiles/diffusion.dir/clean
 CMakeFiles/diffusion_lib.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion_lib.dir/build.make CMakeFiles/diffusion_lib.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion_lib.dir/build.make CMakeFiles/diffusion_lib.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=3,4,5,6,7 "Built target diffusion_lib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=3,4,5,6,7 "Built target diffusion_lib"
 .PHONY : CMakeFiles/diffusion_lib.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/diffusion_lib.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/akwang/cs179-diffusion-4/build/CMakeFiles 5
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/bkwang/scratch/cs179-diffusion/build/CMakeFiles 5
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/diffusion_lib.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/akwang/cs179-diffusion-4/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/bkwang/scratch/cs179-diffusion/build/CMakeFiles 0
 .PHONY : CMakeFiles/diffusion_lib.dir/rule
 
 # Convenience name for target.
@@ -105,7 +105,7 @@ diffusion_lib: CMakeFiles/diffusion_lib.dir/rule
 # codegen rule for target.
 CMakeFiles/diffusion_lib.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion_lib.dir/build.make CMakeFiles/diffusion_lib.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=3,4,5,6,7 "Finished codegen for target diffusion_lib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=3,4,5,6,7 "Finished codegen for target diffusion_lib"
 .PHONY : CMakeFiles/diffusion_lib.dir/codegen
 
 # clean rule for target.
@@ -120,14 +120,14 @@ CMakeFiles/diffusion_lib.dir/clean:
 CMakeFiles/diffusion.dir/all: CMakeFiles/diffusion_lib.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion.dir/build.make CMakeFiles/diffusion.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion.dir/build.make CMakeFiles/diffusion.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=1,2 "Built target diffusion"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=1,2 "Built target diffusion"
 .PHONY : CMakeFiles/diffusion.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/diffusion.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/akwang/cs179-diffusion-4/build/CMakeFiles 7
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/bkwang/scratch/cs179-diffusion/build/CMakeFiles 7
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/diffusion.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/akwang/cs179-diffusion-4/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/bkwang/scratch/cs179-diffusion/build/CMakeFiles 0
 .PHONY : CMakeFiles/diffusion.dir/rule
 
 # Convenience name for target.
@@ -137,7 +137,7 @@ diffusion: CMakeFiles/diffusion.dir/rule
 # codegen rule for target.
 CMakeFiles/diffusion.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusion.dir/build.make CMakeFiles/diffusion.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/akwang/cs179-diffusion-4/build/CMakeFiles --progress-num=1,2 "Finished codegen for target diffusion"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles --progress-num=1,2 "Finished codegen for target diffusion"
 .PHONY : CMakeFiles/diffusion.dir/codegen
 
 # clean rule for target.

@@ -155,7 +155,7 @@ public:
     std::shared_ptr<LinearBF16>      t_proj;
 
     // scratch
-    std::shared_ptr<CudaBuffer> catBuf, tbuf, tmp, upBuf;  // Added upBuf for upconv output
+    std::shared_ptr<CudaBuffer> catBuf, tbuf, tmp, upBuf, xBuf;  // Added upBuf for upconv output
 
     explicit DecoderBlockBF16(int outC) : outC_(outC) {}
 
@@ -224,9 +224,19 @@ public:
         // Use separate buffer for upconv output
         size_t upBytes = size_t(B) * outC_ * (H * 2) * (W * 2) * sizeof(__nv_bfloat16);
         if (!upBuf || upBuf->size < upBytes) upBuf = std::make_shared<CudaBuffer>(upBytes);
+
+        std::cerr << "upBuf size: " << upBuf->size << " bytes\n";
         
         up->forward(x, B, H, W, reinterpret_cast<__nv_bfloat16*>(upBuf->data), st);
-        cudaMemcpyAsync(x, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st);
+
+        // resize x and copy
+        // if (x != reinterpret_cast<__nv_bfloat16*>(upBuf->data)) {
+        //     if (!xbuf || xbuf->size < upBytes) xbuf = std::make_shared<CudaBuffer>(upBytes);
+        xBuf = std::make_shared<CudaBuffer>(upBytes);
+        cudaMemcpyAsync(xBuf->data, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st);
+        x = reinterpret_cast<__nv_bfloat16*>(xBuf->data);
+        // }
+        // checkCuda(cudaMemcpyAsync(x, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st));
 
         // Debug print after upconv
         // std::cout << "After upconv - first 16 elements: ";
@@ -237,8 +247,8 @@ public:
         // std::cout << std::endl;
 
         dump_chw("x after upconv", x, outC_, H, W, st);
-        s.H *= 2;  s.W *= 2;  s.C = outC_;
-    }
+        dump_chw("x after upconv(buffer)", reinterpret_cast<__nv_bfloat16*>(upBuf->data), outC_, H, W, st);
+        s.H *= 2;  s.W *= 2;  s.C = outC_;    }
 };
 
 //──────────────────────────────────────────────────────────────────────
