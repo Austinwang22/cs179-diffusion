@@ -68,14 +68,39 @@ __global__ void add_bias_fp32_kernel(float *y, const __nv_bfloat16 *b, int n)
 //     y[idx]  = __float2bfloat16(v);    // single-rounding back to BF16
 // }
 
-__global__ static void add_bias_kernel(__nv_bfloat16 *y, const __nv_bfloat16 *b,
-                                       std::size_t total, int C, int HW)
+// __global__ void add_bais_conv_kernel(__nv_bfloat16 *y,
+//                                           const __nv_bfloat16 *b,
+//                                           int B, int C, int HW)
+// {
+//     const std::size_t tot = std::size_t(B) * C * HW;
+//     for (std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+//          idx < tot;
+//          idx += std::size_t(blockDim.x) * gridDim.x)
+//     {
+//         const int   c  = (idx / HW) % C;      // channel
+//         const float vy = __bfloat162float(y[idx]);
+//         const float vb = __bfloat162float(b[c]);
+//         y[idx] = 0.4; // __float2bfloat16(vy + vb);
+//     }
+// }
+
+__global__ void add_bias_conv_kernel(
+        __nv_bfloat16 *y,           // [B,C,H,W]
+        const __nv_bfloat16 *b,     // [C]
+        int B, int C, int H, int W)
 {
-    std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= total) return;
-    int c   = (i / HW) % C;                 // channel index  (valid because HW>=1)
-    float v = __bfloat162float(y[i]) + __bfloat162float(b[c]);
-    y[i] = __float2bfloat16(v);
+    int index = threadIdx.x + blockIdx.x * blockDim.x;
+
+    const int step = blockDim.x * gridDim.x;
+    const int nelt = B * C * H * W;
+
+    while (index < nelt) {
+        const int c = (index / H * W) % C;           // channel index
+        float v = __bfloat162float(y[index]) + __bfloat162float(b[c]);
+        y[index] = __float2bfloat16_rn(v);        // round-to-nearest
+
+        index += step;
+    }
 }
 
 __global__ void add_time_bias_kernel(__nv_bfloat16 *y,
@@ -91,24 +116,35 @@ __global__ void add_time_bias_kernel(__nv_bfloat16 *y,
     int c = (idx / HW) % C;          // *** correct: (idx / (H*W)) % C ***
 
     float v = __bfloat162float(y[idx]) + __bfloat162float(bias32[b * C + c]);
-    y[idx]  = 0.5; // __float2bfloat16(v);    // single-rounding back to BF16
-}
 
-__global__ void add_time_bias32_kernel(__nv_bfloat16 *y,
-                                     const float *bias32,
-                                     int B, int C, int H, int W)
-{
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    size_t N   = (size_t)B * C * H * W;
-    if (idx >= N) return;
-
-    const int HW = H * W;
-    int b = idx / (C * HW);          // batch index
-    int c = (idx / HW) % C;          // *** correct: (idx / (H*W)) % C ***
-
-    float v = __bfloat162float(y[idx]) + bias32[b * C + c];
     y[idx]  = __float2bfloat16(v);    // single-rounding back to BF16
 }
+
+__global__ static void add_bias_kernel(__nv_bfloat16 *y, const __nv_bfloat16 *b,
+                                       std::size_t total, int C, int HW)
+{
+    std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= total) return;
+    int c   = (i / HW) % C;                 // channel index  (valid because HW>=1)
+    float v = __bfloat162float(y[i]) + __bfloat162float(b[c]);
+    y[i] = __float2bfloat16(v);
+}
+
+// __global__ void add_time_bias32_kernel(__nv_bfloat16 *y,
+//                                      const float *bias32,
+//                                      int B, int C, int H, int W)
+// {
+//     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+//     size_t N   = (size_t)B * C * H * W;
+//     if (idx >= N) return;
+
+//     const int HW = H * W;
+//     int b = idx / (C * HW);          // batch index
+//     int c = (idx / HW) % C;          // *** correct: (idx / (H*W)) % C ***
+
+//     float v = __bfloat162float(y[idx]) + bias32[b * C + c];
+//     y[idx]  = __float2bfloat16(v);    // single-rounding back to BF16
+// }
 
 __global__ void upsample_kernel(const __nv_bfloat16* src, __nv_bfloat16* dst, int C, int H, int W) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -149,21 +185,6 @@ static __global__ void lin_add_bias(__nv_bfloat16 *y, const __nv_bfloat16 *b, in
 //     float v = __bfloat162float(y[idx]) + __bfloat162float(b[c]);
 //     y[idx]  = __float2bfloat16(v);
 // }
-__global__ void conv_add_bias(__nv_bfloat16 *y,
-                                          const __nv_bfloat16 *b,
-                                          int B, int C, int HW)
-{
-    const std::size_t tot = std::size_t(B) * C * HW;
-    for (std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-         idx < tot;
-         idx += std::size_t(blockDim.x) * gridDim.x)
-    {
-        const int   c  = (idx / HW) % C;      // channel
-        const float vy = __bfloat162float(y[idx]);
-        const float vb = __bfloat162float(b[c]);
-        y[idx] = 0.4; // __float2bfloat16(vy + vb);
-    }
-}
 
 // __global__ void scale_kernel(const __nv_bfloat16* x, const float* s, __nv_bfloat16* y, size_t perImg, size_t n) {
 //     size_t idx = blockIdx.x * blockDim.x + threadIdx.x; if (idx >= n) return;

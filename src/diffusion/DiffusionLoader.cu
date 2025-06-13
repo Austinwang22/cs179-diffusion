@@ -7,16 +7,21 @@
 #include <iostream>
 #include <vector>
 
-// auto dump_bf16 = [](const char* tag, const __nv_bfloat16* dev, int n = 16)
-// {
-//     std::vector<__nv_bfloat16> h(n);
-//     checkCuda(cudaMemcpy(h.data(), dev, n * sizeof(__nv_bfloat16),
-//                          cudaMemcpyDeviceToHost));
-//     std::cout << tag << " : ";
-//     for (int i = 0; i < n; ++i)
-//         std::cout << __bfloat162float(h[i]) << ' ';
-//     std::cout << '\n';
-// };
+auto dump_bf16 = [](const char* tag, const __nv_bfloat16* dev, int n = 16)
+{
+    n = std::min(n, 10);
+
+    std::vector<__nv_bfloat16> h(n);
+    std::cout << "dump_bf16: " << tag << " : ";
+    if (!dev) {
+        std::cout << "null pointer\n";
+    }
+    checkCuda(cudaMemcpy(h.data(), dev, n * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost));
+    std::cout << tag << " : ";
+    for (int i = 0; i < n; ++i)
+        std::cout << __bfloat162float(h[i]) << ' ';
+    std::cout << '\n';
+};
 
 // ------------------------------------------------------------------
 // util: decide model root directory
@@ -74,6 +79,8 @@ DiffusionLoader::load_bf16_tensor(safetensors::safetensors_t &st,
     auto dst = std::make_shared<CudaBuffer>(bytes);
     checkCuda(cudaMemcpy(dst->data, src, bytes, cudaMemcpyDefault));
 
+    // dump_bf16(name.c_str(), reinterpret_cast<const __nv_bfloat16*>(dst->data), bytes / sizeof(__nv_bfloat16));
+
     return std::static_pointer_cast<const CudaBuffer>(dst);
 }
 
@@ -126,14 +133,13 @@ std::shared_ptr<UNetBF16> DiffusionLoader::load_diffusion_weights(const std::str
     net->enc0->conv1 = std::make_shared<Conv2dBF16>(1,  C0);
     net->enc0->conv1->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv1.weight", std::vector<size_t>{C0, 1, 3, 3});
     net->enc0->conv1->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv1.bias",   std::vector<size_t>{C0});
-    
     net->enc0->conv2 = std::make_shared<Conv2dBF16>(C0, C0);
     net->enc0->conv2->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv2.weight", std::vector<size_t>{C0, C0, 3, 3});
     net->enc0->conv2->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.conv2.bias",   std::vector<size_t>{C0});
-    
     net->enc0->t_proj = std::make_shared<LinearBF16>(T, C0);
     net->enc0->t_proj->W_ = load_bf16_tensor(st, "unet.enc_blocks.0.time_proj.weight", std::vector<size_t>{C0, T});
     net->enc0->t_proj->b_ = load_bf16_tensor(st, "unet.enc_blocks.0.time_proj.bias",   std::vector<size_t>{C0});
+    net->enc0->pool = std::make_shared<MaxPool2dBF16>();
 
     // ---- Encoder‑1 -----------------------------
     net->enc1 = std::make_shared<EncoderBlockBF16>();
@@ -146,6 +152,7 @@ std::shared_ptr<UNetBF16> DiffusionLoader::load_diffusion_weights(const std::str
     net->enc1->t_proj = std::make_shared<LinearBF16>(T, C1);
     net->enc1->t_proj->W_ = load_bf16_tensor(st, "unet.enc_blocks.1.time_proj.weight", std::vector<size_t>{C1, T});
     net->enc1->t_proj->b_ = load_bf16_tensor(st, "unet.enc_blocks.1.time_proj.bias",   std::vector<size_t>{C1});
+    net->enc1->pool = std::make_shared<MaxPool2dBF16>();
 
     // ---- Bottleneck ----------------------------
     net->bott = std::make_shared<BottleneckBF16>();

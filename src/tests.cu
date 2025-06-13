@@ -92,8 +92,8 @@ static bool test_linear()
         B[o] = float(o);
         for (int i = 0; i < IN; ++i) W[o * IN + i] = float((o + 1) * (i + 2));
     }
-    copy_host_to_bf16(W, lin.W->data);
-    copy_host_to_bf16(B, lin.b->data);
+    copy_host_to_bf16(W, lin.W_->data);
+    copy_host_to_bf16(B, lin.b_->data);
 
     CudaBuffer x_dev(IN * sizeof(__nv_bfloat16));
     CudaBuffer y_dev(OUT * sizeof(__nv_bfloat16));
@@ -120,7 +120,7 @@ static bool test_conv_identity()
     Conv2dBF16 conv(Cin, Cout);
 
     std::vector<float> k(9, 0.f); k[4] = 1.f;
-    copy_host_to_bf16(k, conv.weights());
+    copy_host_to_bf16(k, conv.W_->data);  // single copy is enough
 
     std::vector<float> img(H * W); for (int i = 0; i < H * W; ++i) img[i] = float(i);
     CudaBuffer x(H * W * sizeof(__nv_bfloat16)), y(H * W * sizeof(__nv_bfloat16));
@@ -165,7 +165,7 @@ static bool test_conv_transpose()
     /* kernel: all ones -> replicate */
     std::vector<float> k = {1.f, 1.f,
                             1.f, 1.f};
-    copy_host_to_bf16(k, deconv.weights());      // single copy is enough
+    copy_host_to_bf16(k, deconv.W_->data);      // single copy is enough
 
     /* 2×2 input */
     std::vector<float> img = {1, 2,

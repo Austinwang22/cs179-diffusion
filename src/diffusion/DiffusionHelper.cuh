@@ -81,7 +81,7 @@ static void dump(const char* tag,
 
 static void dump_chw(const char* tag,
                      const __nv_bfloat16* d, int C,int H,int W, cudaStream_t s=0) { 
-    dump(tag, d, std::min<size_t>(C*H*W,32), s); 
+    dump(tag, d, std::min<size_t>(C*H*W,10), s); 
 }
 
 inline void fp32_to_bf16(const float *src, __nv_bfloat16 *dst,
@@ -131,19 +131,32 @@ inline void silu_inplace32(float *x, size_t n, cudaStream_t s)
 //     kernels::add_time_bias_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
 // }
 
-inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
+inline void add_bias_conv(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
 {
-    constexpr int TPB = 256;
-    size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
-    kernels::add_time_bias_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
+    // std::cerr << "B: " << B;
+    // std::cerr << " C: " << C;
+    // std::cerr << " H: " << H;
+    // std::cerr << " W: " << W;
+    // std::cerr << "\nthe maximum index is: " << B * C * H * W << "\n";
+
+    // constexpr int TPB = 256;
+    // size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
+    kernels::add_bias_conv_kernel<<<256, 256, 0, s>>>(y, bias32, B, C, H, W);
 }
 
-inline void add_time_bias32(__nv_bfloat16 *y, const float *bias32, int B, int C, int H, int W, cudaStream_t s)
+inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
 {
-    constexpr int TPB = 256;
-    size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
-    kernels::add_time_bias32_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H, W);
+    // constexpr int TPB = 256;
+    // size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
+    kernels::add_time_bias_kernel<<<256, 256, 0, s>>>(y, bias32, B, C, H, W);
 }
+
+// inline void add_time_bias32(__nv_bfloat16 *y, const float *bias32, int B, int C, int H, int W, cudaStream_t s)
+// {
+//     constexpr int TPB = 256;
+//     size_t blocks = (size_t(B) * C * H * W + TPB - 1) / TPB;
+//     kernels::add_time_bias32_kernel<<<blocks, TPB, 0, s>>>(y, bias32, B, C, H*W);
+// }
 
 // inline void add_time_bias(__nv_bfloat16 *y, const __nv_bfloat16 *bias32, int B, int C, int H, int W, cudaStream_t s)
 // {

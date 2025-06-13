@@ -16,7 +16,7 @@ struct Shape { int B, C, H, W; };
 // ────────────────────────────────────────────────────────────────────────────
 class EncoderBlockBF16 {
 public:
-    std::shared_ptr<Conv2dBF16>   conv1, conv2;
+    std::shared_ptr<Conv2dBF16>    conv1, conv2;
     std::shared_ptr<MaxPool2dBF16> pool;
     std::shared_ptr<LinearBF16>    t_proj;
 
@@ -27,70 +27,74 @@ public:
     // -------------------------------------------------------------
     void forward(__nv_bfloat16 *x, Shape &s, const __nv_bfloat16 *temb,
                  std::vector<std::shared_ptr<CudaBuffer>> &skips,
-                 cudaStream_t st)
-    {
+                 cudaStream_t st) {
+
         /* ---- 1. project time-embedding → FP32 bias tensor ---- */        
-        // ensure_size(tbuf, size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
-        tbuf = std::make_unique<CudaBuffer>(size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
-        // for (int b = 0; b < s.B; ++b)
+        auto tbuf = std::make_unique<CudaBuffer>(s.B * conv1->outC_ * sizeof(__nv_bfloat16));
+        t_proj->forward(temb, reinterpret_cast<__nv_bfloat16*>(tbuf->data), st);
+
+        dump_chw("=========== temb", temb, conv1->outC_, s.H, s.W, st);
+        dump_chw("=========== TBUF", reinterpret_cast<const __nv_bfloat16*>(tbuf->data), conv1->outC_, s.H, s.W, st);
+
+        // for (int b = 0; b < s.B; b++)
         //     t_proj->forward(
         //         temb + b * t_proj->in_f,
         //         reinterpret_cast<__nv_bfloat16*>(tbuf->data) + b * conv1->outC_,
         //         st);
-        t_proj->forward(
-            temb,
-            reinterpret_cast<__nv_bfloat16*>(tbuf->data), // modified
-            st
-        );
-        const __nv_bfloat16* tbias = reinterpret_cast<const __nv_bfloat16*>(tbuf->data);
-
-        dump_chw("===1FUCKING RETARD ASS BITCH", reinterpret_cast<const __nv_bfloat16*>(tbias), conv1->outC_, s.H, s.W, st);
-
+        // const __nv_bfloat16* tbias = reinterpret_cast<const __nv_bfloat16*>(tbuf->data);
+ 
         /* ---- 2. workspace for conv1 ---- */
-        // ensure_size(tmp, size_t(s.B) * conv1->outC_ * s.H * s.W  * sizeof(__nv_bfloat16));
-        tmp = std::make_unique<CudaBuffer>(size_t(s.B) * conv1->outC_ * s.H * s.W  * sizeof(__nv_bfloat16));
+        auto tmp = std::make_unique<CudaBuffer>(s.B * conv1->outC_ * s.H * s.W  * sizeof(__nv_bfloat16));
+
+        // std::cerr << "tbuf has size: " << s.B * conv1->outC_ << " " << tbuf->size << "\n";
+        // std::cerr << "multiply by " << sizeof(__nv_bfloat16) << " " << "\n";
+        // std::cerr << "tmp has size: " << s.B * conv1->outC_ * s.H * s.W << " " << tmp->size << "\n";
+        // std::cerr << "multiply by " << sizeof(__nv_bfloat16) << "\n";
 
         /* ---- 3. conv-1 → add FP32 bias → ReLU ---- */
-            dump_chw("1 enc0-conv1 CUDA", x, conv1->outC_, s.H, s.W, st);
+            dump_chw("\nstarting x", x, conv1->outC_, s.H, s.W, st);
         conv1->forward(x, s.B, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
-            dump_chw("2 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
-        add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp->data), tbias, s.B, conv1->outC_, s.H, s.W, st);
-            dump_chw("3 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
+            dump_chw("x after convolution (temp)", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
+        add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp->data), reinterpret_cast<const __nv_bfloat16*>(tbuf->data), s.B, conv1->outC_, s.H, s.W, st);
+            dump_chw("x after time bias (temp)", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
         relu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp->data), size_t(s.B) * conv1->outC_ * s.H * s.W, st);
-            dump_chw("4 enc0-conv1 CUDA", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
+            dump_chw("x after relu (temp)", reinterpret_cast<__nv_bfloat16*>(tmp->data), conv1->outC_, s.H, s.W, st);
             std::cerr << "=======\n";
 
-        dump_chw("===2FUCKING RETARD ASS BITCH", reinterpret_cast<const __nv_bfloat16*>(tbias), conv1->outC_, s.H, s.W, st);
+        // dump_chw("============ tbuf after mini block", reinterpret_cast<const __nv_bfloat16*>(tbuf->data), conv1->outC_, s.H, s.W, st);
 
         // conv2 + bias + ReLU (in‑place to x)
-            dump_chw("1 enc0-conv2 CUDA",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
-            dump_chw("===3FUCKING RETARD ASS BITCH", reinterpret_cast<const __nv_bfloat16*>(tbias), conv1->outC_, s.H, s.W, st);
+            dump_chw("\nstarting x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
         conv2->forward(reinterpret_cast<__nv_bfloat16*>(tmp->data), s.B, s.H, s.W, x, st);
-            dump_chw("2 enc0-conv2 CUDA", x, conv2->outC_, s.H, s.W, st);
-            dump_chw("===4FUCKING RETARD ASS BITCH", reinterpret_cast<const __nv_bfloat16*>(tbias), conv1->outC_, s.H, s.W, st);
-        add_time_bias(x, tbias, s.B, conv2->outC_, s.H, s.W, st);
-            dump_chw("3 enc0-conv2 CUDA", x, conv2->outC_, s.H, s.W, st);
+            dump_chw("x after convolution (x)", x, conv2->outC_, s.H, s.W, st);
+        add_time_bias(x, reinterpret_cast<const __nv_bfloat16*>(tbuf->data), s.B, conv2->outC_, s.H, s.W, st);
+            dump_chw("x after time bias (x)", x, conv2->outC_, s.H, s.W, st);
         relu_inplace(x, size_t(s.B) * conv2->outC_ * s.H * s.W, st);
-            dump_chw("4 enc0-conv2 CUDA", x, conv2->outC_, s.H, s.W, st);
+            dump_chw("x after relu (x)", x, conv2->outC_, s.H, s.W, st);
 
-        std::cerr << "========================\n";
+        s.C = conv2->outC_;
 
-        // s.C = conv2->outC_;
+        // save skip
+        auto saved = std::make_shared<CudaBuffer>(size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
+        cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
+        skips.push_back(saved);
 
-        // // save skip
-        // auto saved = std::make_shared<CudaBuffer>(size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
-        // cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
-        // skips.push_back(saved);
-
-        // // MaxPool downsample
-        // pool->forward(x, s.B, s.C, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
-        // cudaMemcpyAsync(x, tmp->data, size_t(s.B) * s.C * (s.H/2) * (s.W/2) * sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, st);
-        // s.H /= 2; s.W /= 2;
+        // MaxPool downsample
+        pool->forward(x, s.B, s.C, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
+        cudaMemcpyAsync(x, tmp->data, size_t(s.B) * s.C * (s.H/2) * (s.W/2) * sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, st);
+        s.H /= 2; 
+        s.W /= 2;
         // channels already updated: s.C stays = conv2->outC_
+        
+        dump_chw("=========== temb", temb, conv1->outC_, s.H, s.W, st);
+        dump_chw("=========== TBUF", reinterpret_cast<const __nv_bfloat16*>(tbuf->data), conv1->outC_, s.H, s.W, st);
+        dump_chw("x after downsample (x)", x, conv2->outC_, s.H, s.W, st);
+        std::cerr << "========================\n";
     }
 
 private:
-    std::shared_ptr<CudaBuffer> tmp, tbuf;
+    // std::unique_ptr<CudaBuffer> tmp;
+    // std::unique_ptr<const CudaBuffer> tbuf;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -110,7 +114,7 @@ public:
     {
         // project time → bias
         // ensure_size(tbuf, size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
-        tbuf = std::make_shared<CudaBuffer>(size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
+        auto tbuf = std::make_shared<CudaBuffer>(size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
         for (int b = 0; b < s.B; ++b)
             t_proj->forward(
                 temb + b * t_proj->in_f,
@@ -120,7 +124,7 @@ public:
 
         // conv1
         // ensure_size(tmp, size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
-        tmp = std::make_shared<CudaBuffer>(size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
+        auto tmp = std::make_shared<CudaBuffer>(size_t(s.B) * s.C * s.H * s.W * sizeof(__nv_bfloat16));
         
         conv1->forward(x, s.B, s.H, s.W,
                       reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
@@ -136,7 +140,7 @@ public:
     }
 
 private:
-    std::shared_ptr<CudaBuffer> tmp, tbuf;
+    // std::shared_ptr<CudaBuffer> tmp, tbuf;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -158,7 +162,7 @@ public:
         const size_t skipElems = skip->size / sizeof(__nv_bfloat16);
         int skipC = static_cast<int>(skipElems / (size_t(s.B) * s.H * s.W));
         // ensure_size(catBuf, size_t(s.B) * (s.C + skipC) * s.H * s.W * sizeof(__nv_bfloat16));
-        catBuf = std::make_shared<CudaBuffer>(size_t(s.B) * (s.C + skipC) * s.H * s.W * sizeof(__nv_bfloat16));
+        auto catBuf = std::make_shared<CudaBuffer>(size_t(s.B) * (s.C + skipC) * s.H * s.W * sizeof(__nv_bfloat16));
         
         cudaMemcpyAsync(catBuf->data, skip->data, skip->size, cudaMemcpyDeviceToDevice, st);
         cudaMemcpyAsync(reinterpret_cast<__nv_bfloat16*>(catBuf->data) + skipC * s.B * s.H * s.W,
@@ -167,7 +171,7 @@ public:
 
         // time proj
         // ensure_size(tbuf, size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
-        tbuf = std::make_shared<CudaBuffer>(size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
+        auto tbuf = std::make_shared<CudaBuffer>(size_t(s.B) * conv1->outC_ * sizeof(__nv_bfloat16));
         for (int b = 0; b < s.B; ++b)
             t_proj->forward(
                 temb + b * t_proj->in_f,
@@ -191,7 +195,7 @@ public:
     }
 
 private:
-    std::shared_ptr<CudaBuffer>      catBuf, tbuf;
+    // std::shared_ptr<CudaBuffer>      catBuf, tbuf;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -245,7 +249,9 @@ public:
 
         // encoders
         enc0->forward(x, s, temb, skips, st);
+        cudaStreamSynchronize(st);
         enc1->forward(x, s, temb, skips, st);
+        cudaStreamSynchronize(st);
 
         // // bottleneck
         // bott->forward(x, s, temb, st);
