@@ -114,5 +114,11 @@ target_link_libraries(diffusion_lib
 add_executable(diffusion src/vendor/argparse.hpp src/main.cu)
 target_link_libraries(diffusion PRIVATE diffusion_lib)
 
-# add_executable(tests src/tests.cu)
-# target_link_libraries(tests PRIVATE diffusion_lib)
+add_executable(tests src/tests.cu)
+target_link_libraries(tests PRIVATE diffusion_lib)
+
+add_executable(sample
+    src/sample.cu                # your new file      ←───────────
+    src/vendor/stb_image_write.h # header-only helper (PNG)
+)
+target_link_libraries(sample PRIVATE diffusion_lib)

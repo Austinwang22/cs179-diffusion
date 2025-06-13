@@ -1,4 +1,6 @@
-/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles/diffusion_lib.dir
-/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles/diffusion.dir
-/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles/edit_cache.dir
-/home/bkwang/scratch/cs179-diffusion/build/CMakeFiles/rebuild_cache.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/diffusion_lib.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/diffusion.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/tests.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/sample.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/edit_cache.dir
+/home/akwang/cs179-diffusion-5/build/CMakeFiles/rebuild_cache.dir

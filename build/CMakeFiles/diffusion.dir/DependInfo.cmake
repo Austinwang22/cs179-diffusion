@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/bkwang/scratch/cs179-diffusion/src/main.cu" "CMakeFiles/diffusion.dir/src/main.cu.o" "gcc" "CMakeFiles/diffusion.dir/src/main.cu.o.d"
+  "/home/akwang/cs179-diffusion-5/src/main.cu" "CMakeFiles/diffusion.dir/src/main.cu.o" "gcc" "CMakeFiles/diffusion.dir/src/main.cu.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

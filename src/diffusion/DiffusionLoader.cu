@@ -194,15 +194,14 @@ std::shared_ptr<UNetBF16> DiffusionLoader::load_diffusion_weights(const std::str
     net->dec1->up = std::make_shared<ConvTrans2dBF16>(D1O, D1O);
     net->dec1->up->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.upsample.weight", std::vector<size_t>{D1O, D1O, 2, 2});
     net->dec1->up->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.upsample.bias",   std::vector<size_t>{D1O});
-    
     net->dec1->t_proj = std::make_shared<LinearBF16>(T, D1O);
     net->dec1->t_proj->W_ = load_bf16_tensor(st, "unet.dec_blocks.1.time_proj.weight", std::vector<size_t>{D1O, T});
     net->dec1->t_proj->b_ = load_bf16_tensor(st, "unet.dec_blocks.1.time_proj.bias",   std::vector<size_t>{D1O});
 
-    // ---- head conv -----------------------------
-    net->out_conv1 = std::make_shared<Conv2dBF16>(D1O, DiffusionConfig::out_channels);
-    net->out_conv1->W_ = load_bf16_tensor(st, "unet.out_conv.weight", std::vector<size_t>{DiffusionConfig::out_channels, D1O, 1, 1});
-    net->out_conv1->b_ = load_bf16_tensor(st, "unet.out_conv.bias",   std::vector<size_t>{DiffusionConfig::out_channels});
+    // ---- Final 1x1 conv -------------------------
+    net->out_conv1 = std::make_shared<Conv2dBF16>(D1O, 1, 1);  // 1x1 kernel
+    net->out_conv1->W_ = load_bf16_tensor(st, "unet.out_conv.weight", std::vector<size_t>{1, D1O, 1, 1});
+    net->out_conv1->b_ = load_bf16_tensor(st, "unet.out_conv.bias",   std::vector<size_t>{1});
 
     return net;
 }

@@ -68,9 +68,9 @@ class DecoderBlock(torch.nn.Module):
         h = self.conv2(h)
         h += t_proj
         h = self.act(h)  
-        print(f'first 16 elements of relu output: {h.flatten()[0:16]}')
+        # print(f'first 16 elements of relu output: {h.flatten()[0:16]}')
         h = self.upsample(h)
-        print(f'first 16 elements of upconv output: {h.flatten()[0:16]}')
+        # print(f'first 16 elements of upconv output: {h.flatten()[0:16]}')
         return h
     
 class Bottleneck(torch.nn.Module):
@@ -124,12 +124,19 @@ class UNet(torch.nn.Module):
             
         x = self.bottleneck(x, t_emb)
         
-        print(f'\nbottleneck output: {x.flatten()[0:16]}')
+        # print(f'\nbottleneck output: {x.flatten()[0:16]}')
         
         for i, dec_block in enumerate(self.dec_blocks):
             x = dec_block(x, t_emb, enc_outs.pop())
             # print(f'\ndecoder {i} output: {x.flatten()[0:16]}')
-        return self.out_conv(x)
+        
+        
+        # Print weights of out_conv
+        # print(f'\nout_conv weights: {self.out_conv.weight.flatten()[0:16]}')    
+        
+        out = self.out_conv(x)
+        # print(f'\noutconv output: {out.flatten()[0:16]}')
+        return out
     
 class EDMPrecond(torch.nn.Module):
     '''

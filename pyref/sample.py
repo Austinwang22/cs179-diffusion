@@ -15,8 +15,8 @@ def euler_sampler(net, num_samples, num_steps=18, sigma_min=0.002,
     t_steps = torch.cat([t_steps, torch.zeros_like(t_steps[:1])]).to(torch.float32) # t_N = 0
 
     x_next = torch.randn([num_samples, *net.unet.shape], device=device) * sigma_max
-    pbar = tqdm(range(num_steps))
-    for i in pbar:
+    # pbar = tqdm(range(num_steps))
+    for i in range(num_steps):
         t_cur = t_steps[i]
         t_next = t_steps[i + 1]
 

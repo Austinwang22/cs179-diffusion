@@ -1,4 +1,4 @@
-CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/scratch/cs179-diffusion/src/main.cu \
+CMakeFiles/diffusion.dir/src/main.cu.o : /home/akwang/cs179-diffusion-5/src/main.cu \
     /usr/include/stdc-predef.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_runtime.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/host_config.h \
@@ -185,8 +185,8 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/scratch/cs179-diffusion/sr
     /usr/include/c++/11/utility \
     /usr/include/c++/11/bits/stl_relops.h \
     /usr/include/c++/11/initializer_list \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionLoader.cu \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionLoader.h \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionLoader.cu \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionLoader.h \
     /usr/include/c++/11/memory \
     /usr/include/c++/11/bits/allocator.h \
     /usr/include/x86_64-linux-gnu/c++/11/bits/c++allocator.h \
@@ -335,11 +335,11 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/scratch/cs179-diffusion/sr
     /usr/local/cuda-12.5/targets/x86_64-linux/include/nv/detail/__preprocessor \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_fp16.hpp \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_bf16.hpp \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/../CudaBuffer.cuh \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionConfig.h \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionUNet.cuh \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionLayers.cuh \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionHelper.cuh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/../CudaBuffer.cuh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionConfig.h \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionUNet.cuh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionLayers.cuh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionHelper.cuh \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_v2.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cublas_api.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuComplex.h \
@@ -356,17 +356,30 @@ CMakeFiles/diffusion.dir/src/main.cu.o : /home/bkwang/scratch/cs179-diffusion/sr
     /usr/include/cudnn_cnn_infer.h \
     /usr/include/cudnn_cnn_train.h \
     /usr/include/cudnn_backend.h \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/../ErrorCheck.h \
+    /home/akwang/cs179-diffusion-5/src/diffusion/../ErrorCheck.h \
     /usr/include/c++/11/iostream \
     /usr/include/c++/11/istream \
     /usr/include/c++/11/bits/istream.tcc \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/DiffusionKernels.cuh \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/../vendor/safetensors.hh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/DiffusionKernels.cuh \
+    /home/akwang/cs179-diffusion-5/src/diffusion/../vendor/safetensors.hh \
     /usr/include/c++/11/map \
     /usr/include/c++/11/bits/stl_tree.h \
     /usr/include/c++/11/bits/node_handle.h \
     /usr/include/c++/11/bits/stl_map.h \
     /usr/include/c++/11/bits/stl_multimap.h \
     /usr/include/c++/11/bits/erase_if.h \
-    /home/bkwang/scratch/cs179-diffusion/src/diffusion/../HostBuffer.h \
-    /usr/include/c++/11/cstddef
+    /home/akwang/cs179-diffusion-5/src/diffusion/../HostBuffer.h \
+    /usr/include/c++/11/cstddef \
+    /usr/include/c++/11/iomanip \
+    /usr/include/c++/11/locale \
+    /usr/include/c++/11/bits/locale_facets_nonio.h \
+    /usr/include/c++/11/ctime \
+    /usr/include/x86_64-linux-gnu/c++/11/bits/time_members.h \
+    /usr/include/x86_64-linux-gnu/c++/11/bits/messages_members.h \
+    /usr/include/libintl.h \
+    /usr/include/c++/11/bits/codecvt.h \
+    /usr/include/c++/11/bits/locale_facets_nonio.tcc \
+    /usr/include/c++/11/bits/locale_conv.h \
+    /usr/include/c++/11/bits/quoted_string.h \
+    /usr/include/c++/11/sstream \
+    /usr/include/c++/11/bits/sstream.tcc

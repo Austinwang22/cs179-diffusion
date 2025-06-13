@@ -1,7 +1,7 @@
 {
 	"InstallScripts" : 
 	[
-		"/home/bkwang/scratch/cs179-diffusion/build/cmake_install.cmake"
+		"/home/akwang/cs179-diffusion-5/build/cmake_install.cmake"
 	],
 	"Parallel" : false
 }

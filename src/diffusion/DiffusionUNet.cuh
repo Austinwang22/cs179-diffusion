@@ -15,14 +15,14 @@ auto dump_bf16_2 = [](const char* tag, const __nv_bfloat16* dev, int n = 16)
     n = std::min(n, 10);
 
     std::vector<__nv_bfloat16> h(n);
-    std::cout << "dump_bf16: " << tag << " : ";
-    if (!dev) {
-        std::cout << "null pointer\n";
-    }
+    // std::cout << "dump_bf16: " << tag << " : ";
+    // if (!dev) {
+    //     std::cout << "null pointer\n";
+    // }
     checkCuda(cudaMemcpy(h.data(), dev, n * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost));
-    for (int i = 0; i < n; ++i)
-        std::cout << __bfloat162float(h[i]) << ' ';
-    std::cout << '\n';
+    // for (int i = 0; i < n; ++i)
+    //     std::cout << __bfloat162float(h[i]) << ' ';
+    // std::cout << '\n';
 };
 
 struct Shape { int B, C, H, W; };
@@ -59,20 +59,20 @@ public:
                             st);
 
         //---------------- conv‑1 ------------------------------------
-        dump_chw("\nstarting x", x, conv1->outC_, s.H, s.W, st);
+        // dump_chw("\nstarting x", x, conv1->outC_, s.H, s.W, st);
         
         size_t tmpBytes = size_t(B) * outC1 * s.H * s.W * sizeof(__nv_bfloat16);
         if (!tmp || tmp->size < tmpBytes) tmp = std::make_shared<CudaBuffer>(tmpBytes);
         
         conv1->forward(x, B, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
-            dump_chw("\nafter first convolution x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
+            // dump_chw("\nafter first convolution x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
         add_time_bias(reinterpret_cast<__nv_bfloat16*>(tmp->data), tbias,
                       B, outC1, s.H, s.W, st);
-            dump_chw("\nafter first bias x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
+            // dump_chw("\nafter first bias x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
         relu_inplace(reinterpret_cast<__nv_bfloat16*>(tmp->data), size_t(B)*outC1*s.H*s.W, st);
 
         //---------------- conv‑2 (may change channels) --------------
-        dump_chw("\nafter first conv-add block x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
+        // dump_chw("\nafter first conv-add block x",  reinterpret_cast<__nv_bfloat16*>(tmp->data), conv2->outC_, s.H, s.W, st);
         
         const int outC2 = conv2->outC_;
         size_t xbBytes  = size_t(B) * outC2 * s.H * s.W * sizeof(__nv_bfloat16);
@@ -87,7 +87,7 @@ public:
         x = reinterpret_cast<__nv_bfloat16*>(xbuf->data);
         s.C = outC2;
 
-        dump_chw("x after conv2", x, outC2, s.H, s.W, st);
+        // dump_chw("x after conv2", x, outC2, s.H, s.W, st);
 
         //---------------- MaxPool ↓2 --------------------------------
         pool->forward(x, B, s.C, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(tmp->data), st);
@@ -96,17 +96,17 @@ public:
                         cudaMemcpyDeviceToDevice, st);
         s.H /= 2;  s.W /= 2;
 
-        dump_chw("x pooling", x, outC2, s.H, s.W, st);
+        // dump_chw("x pooling", x, outC2, s.H, s.W, st);
 
         //---------------- save skip AFTER pooling ------------------
         auto saved = std::make_shared<CudaBuffer>(size_t(B)*s.C*s.H*s.W*sizeof(__nv_bfloat16));
         cudaMemcpyAsync(saved->data, x, saved->size, cudaMemcpyDeviceToDevice, st);
         skips.push_back(saved);
 
-        std::cerr << "============================\n";
+        // std::cerr << "============================\n";
 
         // Print the shape of the weights of conv2
-        std::cout << "conv2 weights shape: [" << conv2->outC_ << ", " << conv2->inC_ << "]" << std::endl;
+        // std::cout << "conv2 weights shape: [" << conv2->outC_ << ", " << conv2->inC_ << "]" << std::endl;
     }
 };
 
@@ -203,51 +203,17 @@ public:
 
         relu_inplace(x, size_t(B)*outC_*H*W, st);
 
-        // Print the number of nonzero elements in x
-        int num_nonzero = 0;
-        for (int i = 0; i < B*outC_*H*W; ++i) {
-            if (x[i] != __nv_bfloat16(0)) {
-                num_nonzero++;
-            }
-        }
-        std::cout << "number of nonzero elements in x: " << num_nonzero << std::endl;
-
-        // // Debug print before upconv
-        // std::cout << "Before upconv - first 16 elements: ";
-        // std::vector<__nv_bfloat16> h(16);
-        // cudaMemcpy(h.data(), x, 16 * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost);
-        // for (int i = 0; i < 16; ++i) {
-        //     std::cout << __bfloat162float(h[i]) << " ";
-        // }
-        // std::cout << std::endl;
-
         // Use separate buffer for upconv output
         size_t upBytes = size_t(B) * outC_ * (H * 2) * (W * 2) * sizeof(__nv_bfloat16);
         if (!upBuf || upBuf->size < upBytes) upBuf = std::make_shared<CudaBuffer>(upBytes);
-
-        std::cerr << "upBuf size: " << upBuf->size << " bytes\n";
         
         up->forward(x, B, H, W, reinterpret_cast<__nv_bfloat16*>(upBuf->data), st);
 
         // resize x and copy
-        // if (x != reinterpret_cast<__nv_bfloat16*>(upBuf->data)) {
-        //     if (!xbuf || xbuf->size < upBytes) xbuf = std::make_shared<CudaBuffer>(upBytes);
         xBuf = std::make_shared<CudaBuffer>(upBytes);
         cudaMemcpyAsync(xBuf->data, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st);
         x = reinterpret_cast<__nv_bfloat16*>(xBuf->data);
-        // }
-        // checkCuda(cudaMemcpyAsync(x, upBuf->data, upBytes, cudaMemcpyDeviceToDevice, st));
 
-        // Debug print after upconv
-        // std::cout << "After upconv - first 16 elements: ";
-        // cudaMemcpy(h.data(), x, 16 * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost);
-        // for (int i = 0; i < 16; ++i) {
-        //     std::cout << __bfloat162float(h[i]) << " ";
-        // }
-        // std::cout << std::endl;
-
-        dump_chw("x after upconv", x, outC_, H, W, st);
-        dump_chw("x after upconv(buffer)", reinterpret_cast<__nv_bfloat16*>(upBuf->data), outC_, H, W, st);
         s.H *= 2;  s.W *= 2;  s.C = outC_;    }
 };
 
@@ -268,8 +234,9 @@ public:
     std::shared_ptr<Conv2dBF16>        out_conv1;
 
     std::shared_ptr<CudaBuffer> tembBuf;
+    std::shared_ptr<CudaBuffer> outBuf;  // Add output buffer as member
 
-    void forward(__nv_bfloat16 *x, const int32_t *t_host, int B) {
+    __nv_bfloat16* forward(__nv_bfloat16 *x, const int32_t *t_host, int B) {
         // convenience alias
         auto st = stream;
 
@@ -290,20 +257,31 @@ public:
 
         bott->forward(x, s, temb, st);
 
-        dump_chw("x after bottleneck", x, s.C, s.H, s.W, st);
+        // dump_chw("x after bottleneck", x, s.C, s.H, s.W, st);
 
         dec0->forward(x, s, skips.back(), temb, st); skips.pop_back();
 
-        dump_chw("x after decoder0", x, s.C, s.H, s.W, st);
+        // dump_chw("x after decoder0", x, s.C, s.H, s.W, st);
 
         dec1->forward(x, s, skips.back(), temb, st); skips.pop_back();
 
-        dump_chw("x after decoder1", x, s.C, s.H, s.W, st);
+        // dump_chw("x after decoder1", x, s.C, s.H, s.W, st);
 
-        out_conv1->forward(x, s.B, s.H, s.W, x, st);  
+        // Print weights of out_conv1
+        // dump_bf16_2("out_conv1 weights", reinterpret_cast<__nv_bfloat16*>(out_conv1->W_->data), out_conv1->W_->size / sizeof(__nv_bfloat16));
+
+        // Create or resize output buffer if needed
+        size_t outBytes = size_t(B) * 1 * s.H * s.W * sizeof(__nv_bfloat16);
+        if (!outBuf || outBuf->size < outBytes) {
+            outBuf = std::make_shared<CudaBuffer>(outBytes);
+        }
         
-        dump_chw("x after out_conv1", x, s.C, s.H, s.W, st);
-        // 1×1 conv head
+        // Perform the 1x1 convolution
+        out_conv1->forward(x, s.B, s.H, s.W, reinterpret_cast<__nv_bfloat16*>(outBuf->data), st);
+        
+        // dump_chw("x after out_conv1", reinterpret_cast<__nv_bfloat16*>(outBuf->data), 1, s.H, s.W, st);
+        
+        return reinterpret_cast<__nv_bfloat16*>(outBuf->data);
     }
 
 private:

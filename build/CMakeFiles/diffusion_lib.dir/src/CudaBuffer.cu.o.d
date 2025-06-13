@@ -1,4 +1,4 @@
-CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o : /home/bkwang/scratch/cs179-diffusion/src/CudaBuffer.cu \
+CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o : /home/akwang/cs179-diffusion-5/src/CudaBuffer.cu \
     /usr/include/stdc-predef.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/cuda_runtime.h \
     /usr/local/cuda-12.5/targets/x86_64-linux/include/crt/host_config.h \
@@ -185,8 +185,8 @@ CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o : /home/bkwang/scratch/cs179-di
     /usr/include/c++/11/utility \
     /usr/include/c++/11/bits/stl_relops.h \
     /usr/include/c++/11/initializer_list \
-    /home/bkwang/scratch/cs179-diffusion/src/CudaBuffer.cuh \
-    /home/bkwang/scratch/cs179-diffusion/src/ErrorCheck.h \
+    /home/akwang/cs179-diffusion-5/src/CudaBuffer.cuh \
+    /home/akwang/cs179-diffusion-5/src/ErrorCheck.h \
     /usr/include/c++/11/iostream \
     /usr/include/c++/11/ostream \
     /usr/include/c++/11/ios \
@@ -284,5 +284,5 @@ CMakeFiles/diffusion_lib.dir/src/CudaBuffer.cu.o : /home/bkwang/scratch/cs179-di
     /usr/include/c++/11/bits/ostream.tcc \
     /usr/include/c++/11/istream \
     /usr/include/c++/11/bits/istream.tcc \
-    /home/bkwang/scratch/cs179-diffusion/src/HostBuffer.h \
+    /home/akwang/cs179-diffusion-5/src/HostBuffer.h \
     /usr/include/c++/11/cstddef

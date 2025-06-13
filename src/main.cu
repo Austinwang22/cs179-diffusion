@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
 void test_forward_with_weights() {
     using DC = DiffusionConfig;
@@ -14,19 +15,15 @@ void test_forward_with_weights() {
     const int numel = B * C * H * W;
     const size_t bytes = numel * sizeof(__nv_bfloat16);
 
+    // Create CUDA stream
+    cudaStream_t stream;
+    checkCuda(cudaStreamCreate(&stream));
+
     // ------------------------------
     // Load weights from safetensors
     // ------------------------------
     DiffusionLoader loader;
-
     const std::string weight_path = loader.get_model_dir();
-    // DiffusionWeights weights = loader.load_diffusion_weights(weight_path);
-
-    // ------------------------------
-    // Initialize model and load weights
-    // ------------------------------
-    // UNetBF16 model(DC::img_resolution, DC::t_emb_dim);
-    // model.load_weights(weights);
     std::shared_ptr<UNetBF16> model = loader.load_diffusion_weights(weight_path);
 
     // ------------------------------
@@ -44,27 +41,72 @@ void test_forward_with_weights() {
     checkCuda(cudaMalloc(&d_tstamp, sizeof(int32_t) * B));
     checkCuda(cudaMemcpy(d_tstamp, h_tstamp, sizeof(int32_t) * B, cudaMemcpyHostToDevice));
 
+    // Print input values
+    std::cout << "\n=== Input Values ===" << std::endl;
+    std::cout << "Shape: [B=" << B << ", C=" << C << ", H=" << H << ", W=" << W << "]" << std::endl;
+    std::cout << "First 16 values: ";
+    for (int i = 0; i < std::min(16, numel); ++i) {
+        std::cout << __bfloat162float(h_input[i]) << " ";
+    }
+    std::cout << std::endl;
+
     // ------------------------------
     // Perform forward pass
     // ------------------------------
-    model->forward(static_cast<__nv_bfloat16 *>(input.data), h_tstamp, B);
+    __nv_bfloat16* output = model->forward(static_cast<__nv_bfloat16 *>(input.data), h_tstamp, B);
 
     // ------------------------------
-    // Dump part of output
+    // Print output values
     // ------------------------------
     std::vector<__nv_bfloat16> h_out(numel);
-    checkCuda(cudaMemcpy(h_out.data(), input.data, bytes, cudaMemcpyDeviceToHost));
+    checkCuda(cudaMemcpy(h_out.data(), output, bytes, cudaMemcpyDeviceToHost));
 
-    std::cout << "[Forward Output]: ";
+    std::cout << "\n=== Output Values ===" << std::endl;
+    std::cout << "Shape: [B=" << B << ", C=1, H=" << H << ", W=" << W << "]" << std::endl;
+    
+    // Print first 16 values
+    std::cout << "First 16 values: ";
     for (int i = 0; i < std::min(16, numel); ++i) {
         std::cout << __bfloat162float(h_out[i]) << " ";
     }
     std::cout << std::endl;
 
+    // Print a small 5x5 grid from the center of the output
+    std::cout << "\nCenter 5x5 grid of output:" << std::endl;
+    int center_h = H / 2;
+    int center_w = W / 2;
+    for (int i = -2; i <= 2; ++i) {
+        for (int j = -2; j <= 2; ++j) {
+            int idx = (center_h + i) * W + (center_w + j);
+            if (idx >= 0 && idx < numel) {
+                std::cout << std::fixed << std::setprecision(4) << __bfloat162float(h_out[idx]) << " ";
+            }
+        }
+        std::cout << std::endl;
+    }
+
+    // Print statistics
+    float min_val = __bfloat162float(h_out[0]);
+    float max_val = __bfloat162float(h_out[0]);
+    float sum = 0.0f;
+    for (int i = 0; i < numel; ++i) {
+        float val = __bfloat162float(h_out[i]);
+        min_val = std::min(min_val, val);
+        max_val = std::max(max_val, val);
+        sum += val;
+    }
+    float mean = sum / numel;
+
+    std::cout << "\nOutput Statistics:" << std::endl;
+    std::cout << "Min: " << min_val << std::endl;
+    std::cout << "Max: " << max_val << std::endl;
+    std::cout << "Mean: " << mean << std::endl;
+
     // ------------------------------
     // Cleanup
     // ------------------------------
     checkCuda(cudaFree(d_tstamp));
+    checkCuda(cudaStreamDestroy(stream));
 }
 
 int main() {
