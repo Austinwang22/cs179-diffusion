@@ -19,7 +19,7 @@ public:
     static std::string get_model_dir();
 
     /**  Load a BF16 tensor from a safetensors file and upload to GPU.           */
-    static std::shared_ptr<const CudaBuffer> load_bf16_tensor(safetensors::safetensors_t &st,
+    static std::shared_ptr<CudaBuffer> load_bf16_tensor(safetensors::safetensors_t &st,
                                                               const std::string &name,
                                                               const std::vector<size_t> &expected);
 

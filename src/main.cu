@@ -47,10 +47,7 @@ void test_forward_with_weights() {
     // ------------------------------
     // Perform forward pass
     // ------------------------------
-    cudaStream_t stream;
-    checkCuda(cudaStreamCreate(&stream));
-    model->forward(static_cast<__nv_bfloat16 *>(input.data), h_tstamp, B, stream);
-    checkCuda(cudaStreamSynchronize(stream));
+    model->forward(static_cast<__nv_bfloat16 *>(input.data), h_tstamp, B);
 
     // ------------------------------
     // Dump part of output
@@ -68,7 +65,6 @@ void test_forward_with_weights() {
     // Cleanup
     // ------------------------------
     checkCuda(cudaFree(d_tstamp));
-    checkCuda(cudaStreamDestroy(stream));
 }
 
 int main() {

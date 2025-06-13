@@ -40,7 +40,7 @@ std::string DiffusionLoader::get_model_dir()
 // util: locate tensor, shape-check, upload to GPU
 // ------------------------------------------------------------------
 
-std::shared_ptr<const CudaBuffer>
+std::shared_ptr<CudaBuffer>
 DiffusionLoader::load_bf16_tensor(safetensors::safetensors_t &st,
                  const std::string &name,
                  const std::vector<size_t> &expected)
@@ -81,7 +81,7 @@ DiffusionLoader::load_bf16_tensor(safetensors::safetensors_t &st,
 
     // dump_bf16(name.c_str(), reinterpret_cast<const __nv_bfloat16*>(dst->data), bytes / sizeof(__nv_bfloat16));
 
-    return std::static_pointer_cast<const CudaBuffer>(dst);
+    return dst; // std::static_pointer_cast<const CudaBuffer>(dst);
 }
 
 // ------------------------------------------------------------------

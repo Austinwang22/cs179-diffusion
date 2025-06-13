@@ -84,24 +84,44 @@ __global__ void add_bias_fp32_kernel(float *y, const __nv_bfloat16 *b, int n)
 //     }
 // }
 
+// __global__ void add_bias_conv_kernel(
+//         __nv_bfloat16 *y,           // [B,C,H,W]
+//         const __nv_bfloat16 *b,     // [C]
+//         int B, int C, int H, int W)
+// {
+//     int index = threadIdx.x + blockIdx.x * blockDim.x;
+
+//     const int step = blockDim.x * gridDim.x;
+//     const int nelt = B * C * H * W;
+
+//     while (index < nelt) {
+//         const int c = (index / H * W) % C;           // channel index
+//         float v = __bfloat162float(y[index]) + __bfloat162float(b[c]);
+//         y[index] = __float2bfloat16_rn(v);        // round-to-nearest
+
+//         index += step;
+//     }
+// }
 __global__ void add_bias_conv_kernel(
-        __nv_bfloat16 *y,           // [B,C,H,W]
+        __nv_bfloat16 *y,           // [B, C, H, W]
         const __nv_bfloat16 *b,     // [C]
-        int B, int C, int H, int W)
+        size_t B, int C,            // batches, channels
+        int H, int W)               // OUT height / width
 {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t HW   = size_t(H) * W;
+    const size_t step = size_t(blockDim.x) * gridDim.x;
+    size_t idx        = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t nelt = B * C * HW;
 
-    const int step = blockDim.x * gridDim.x;
-    const int nelt = B * C * H * W;
-
-    while (index < nelt) {
-        const int c = (index / H * W) % C;           // channel index
-        float v = __bfloat162float(y[index]) + __bfloat162float(b[c]);
-        y[index] = __float2bfloat16_rn(v);        // round-to-nearest
-
-        index += step;
+    while (idx < nelt) {
+        int c   = int( (idx / HW) % C );           // correct channel
+        float v = __bfloat162float(y[idx]) +
+                  __bfloat162float(b[c]);
+        y[idx]  = __float2bfloat16_rn(v);
+        idx += step;
     }
 }
+
 
 __global__ void add_time_bias_kernel(__nv_bfloat16 *y,
                                      const __nv_bfloat16 *bias32,
@@ -125,7 +145,7 @@ __global__ static void add_bias_kernel(__nv_bfloat16 *y, const __nv_bfloat16 *b,
 {
     std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= total) return;
-    int c   = (i / HW) % C;                 // channel index  (valid because HW>=1)
+    int c   = int ((i / HW) % C);                 // channel index  (valid because HW>=1)
     float v = __bfloat162float(y[i]) + __bfloat162float(b[c]);
     y[i] = __float2bfloat16(v);
 }
