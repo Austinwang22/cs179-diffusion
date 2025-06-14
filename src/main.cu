@@ -63,7 +63,7 @@ void test_forward_with_weights() {
 
     std::cout << "\n=== Output Values ===" << std::endl;
     std::cout << "Shape: [B=" << B << ", C=1, H=" << H << ", W=" << W << "]" << std::endl;
-    
+
     // Print first 16 values
     std::cout << "First 16 values: ";
     for (int i = 0; i < std::min(16, numel); ++i) {

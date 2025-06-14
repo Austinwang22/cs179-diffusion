@@ -24,11 +24,24 @@ Here are some generated samples:
 ![Alt text](figs/sample3.png)
 ![Alt text](figs/sample4.png)
 
-For our CUDA implementation, check out the src/ folder. We implemented all of the neural network architecture and kernels in the src/diffusion folder. This includes kernels for activation functions, convolution, transposed convolution, tensor arithmetic, etc. 
+For our CUDA implementation, check out the src/ folder. We implemented all of the neural network architecture 
+and kernels in the src/diffusion folder. This includes kernels for activation functions, convolution, transposed 
+convolution, tensor arithmetic, etc. 
 
-To verify the accuracy of our implementation, we wrote some unit tests for the neural network-related kernels, and also wrote a file src/main.cu to check the output of the UNet's forward pass on a fixed data point. We wrote pyref/debug.py to run our reference Python model on the same input and verified that the CUDA implementation and the Python implementation of the UNet matched on this specific input. 
+To verify the accuracy of our implementation, we wrote some unit tests for the neural 
+network-related kernels, and also wrote a file src/main.cu to check the output of the UNet's 
+forward pass on a fixed data point. We wrote pyref/debug.py to run our reference Python model 
+on the same input and verified that the CUDA implementation and the Python implementation of 
+the UNet matched on this specific input. 
 
-We implemented sampling with the Euler solver as well. Our implementation, while not as fast as the PyTorch version using GPU, can outspeed the CPU version. Unforunately, our current implementation of the Euler sampling has some bugs that we didn't have the time to fix, but we can at least run our forward call of the UNet smoothly and run the entire sampling process.
+We implemented sampling with the Euler solver as well. Our implementation, while not as fast as the PyTorch 
+version using GPU, is currently comparable in speed to the highly optimized PyTorch implementation on CPU. 
+We hypothesize that if we were to naively implement all the operations (i.e. convolution, linear layers, etc.) 
+in C++, our GPU implementation would be much faster; however, for highly optimized PyTorch code on the CPU and 
+on a relatively small model and image resolutions, the PyTorch implementation is comparable in speed to our 
+CUDA implementation. Unforunately, our current implementation of the Euler sampling has some bugs that we didn't 
+have the time to fix, but we can at least run our forward call of the UNet smoothly and run the entire sampling 
+process.
 
 ## CUDA Implementation Details
 
@@ -110,3 +123,8 @@ make
    - Coalesced memory access patterns
    - Efficient kernel launch configurations
    - Stream-based asynchronous execution
+
+We also did some profiling. It seems that our GPU implementation was not the most efficient, 
+as we had a small grid size that limited throughput and low achieved occupancy, according to the profiling
+screenshots. If we had more time, we would focus on first fixing bugs in the code, then ensuring that
+we could focus on the optimization of our CUDA kernels.
